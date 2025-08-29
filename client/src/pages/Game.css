@@ -1,0 +1,254 @@
+.game-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.room-info h2 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.room-info p {
+  margin: 0;
+  color: #cccccc;
+  font-size: 16px;
+}
+
+.leader-badge {
+  background-color: #4a9eff;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+.players-list {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #3a3a3a;
+  border-radius: 8px;
+  color: #ffffff;
+}
+
+.player-item.leader {
+  background-color: #4a4a4a;
+  border: 2px solid #4a9eff;
+}
+
+.crown {
+  font-size: 16px;
+}
+
+.game-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  min-height: 400px;
+}
+
+.waiting-screen {
+  text-align: center;
+  padding: 40px;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 100%;
+}
+
+.waiting-screen h3 {
+  margin: 0 0 16px 0;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.waiting-screen p {
+  margin: 0 0 24px 0;
+  color: #cccccc;
+  font-size: 16px;
+}
+
+.start-button, .reset-button {
+  background-color: #4a9eff;
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.start-button:hover:not(:disabled), .reset-button:hover {
+  background-color: #3a8eff;
+  transform: translateY(-2px);
+}
+
+.start-button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #333;
+  border-top: 4px solid #4a9eff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 20px auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.finished-screen {
+  text-align: center;
+  padding: 40px;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 100%;
+}
+
+.finished-screen h3 {
+  margin: 0 0 24px 0;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+@media (max-width: 768px) {
+  .game-container {
+    padding: 10px;
+  }
+
+  .game-header {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .players-list {
+    justify-content: center;
+  }
+
+  .waiting-screen, .finished-screen {
+    padding: 20px;
+  }
+
+  .start-button, .reset-button {
+    padding: 14px 24px;
+    font-size: 16px;
+  }
+}
+
+/* Rankings Display */
+.rankings-section {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #333;
+  border-radius: 8px;
+}
+
+.rankings-section h4 {
+  margin: 0 0 16px 0;
+  color: #ffffff;
+  font-size: 20px;
+}
+
+.rankings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background-color: #3a3a3a;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.ranking-item.current-player {
+  border-color: #4a9eff;
+  background-color: #4a4a4a;
+}
+
+.rank-position {
+  font-size: 24px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.player-info {
+  flex: 1;
+  text-align: left;
+}
+
+.player-name {
+  display: block;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.player-stats {
+  color: #cccccc;
+  font-size: 14px;
+}
+
+.rank-badge {
+  font-size: 24px;
+}
+
+@media (max-width: 768px) {
+  .ranking-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .rank-position {
+    min-width: auto;
+  }
+
+  .player-info {
+    text-align: center;
+  }
+}

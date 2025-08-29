@@ -1,0 +1,753 @@
+/* Connection Screen */
+.connection-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #1a1a1a;
+}
+
+.connection-content {
+  text-align: center;
+  padding: 40px;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 100%;
+}
+
+.connection-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.connection-content h2 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.connection-content p {
+  margin: 0 0 24px 0;
+  color: #cccccc;
+}
+
+.retry-button {
+  background-color: #4a9eff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.retry-button:hover {
+  background-color: #3a8eff;
+}
+
+/* Room Screen */
+.room-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #1a1a1a;
+  padding: 20px;
+}
+
+.room-content {
+  text-align: center;
+  padding: 40px;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 100%;
+}
+
+.room-content h1 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 36px;
+}
+
+.room-content > p {
+  margin: 0 0 32px 0;
+  color: #cccccc;
+  font-size: 18px;
+}
+
+.room-forms {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.room-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.room-form h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 20px;
+}
+
+.room-form input {
+  width: 100%;
+}
+
+.create-button, .join-button {
+  background-color: #4a9eff;
+  color: white;
+  font-weight: bold;
+}
+
+.create-button:hover:not(:disabled), .join-button:hover:not(:disabled) {
+  background-color: #3a8eff;
+}
+
+.create-button:disabled, .join-button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 0 16px;
+}
+
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: #444;
+}
+
+.divider span {
+  padding: 0 16px;
+  color: #888;
+  font-weight: bold;
+}
+
+.game-rules {
+  text-align: left;
+  background-color: #333;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.game-rules h4 {
+  margin: 0 0 12px 0;
+  color: #ffffff;
+  font-size: 18px;
+}
+
+.game-rules ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #cccccc;
+}
+
+.game-rules li {
+  margin-bottom: 8px;
+}
+
+/* Unified Name Section */
+.name-section {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.name-label {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 12px;
+}
+
+.name-input {
+  width: 100%;
+  max-width: 300px;
+  padding: 16px;
+  font-size: 18px;
+  border: 3px solid #555;
+  border-radius: 12px;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.name-input:focus {
+  outline: none;
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.2);
+}
+
+.name-input.valid {
+  border-color: #4caf50;
+  background-color: rgba(76, 175, 80, 0.1);
+}
+
+.name-input.error {
+  border-color: #f44336;
+  background-color: rgba(244, 67, 54, 0.1);
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.name-error {
+  display: block;
+  color: #f44336;
+  font-size: 14px;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+/* Disabled State for Room Items */
+.room-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.room-item.disabled:hover {
+  background-color: #3a3a3a;
+  border-color: transparent;
+}
+
+/* Password Toggle */
+.password-toggle {
+  display: flex;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.password-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #cccccc;
+}
+
+.password-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+/* Room Input Group */
+.room-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.browse-button {
+  padding: 12px;
+  background-color: #4a4a4a;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s ease;
+}
+
+.browse-button:hover:not(:disabled) {
+  background-color: #5a5a5a;
+}
+
+.browse-button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+/* Room List */
+.room-list {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+.room-list h4 {
+  margin: 0 0 12px 0;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.no-rooms {
+  margin: 0;
+  color: #888;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
+.room-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.room-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: #3a3a3a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.room-item:hover {
+  background-color: #4a4a4a;
+  border-color: #4a9eff;
+}
+
+.room-item.private {
+  border-left: 4px solid #ff9800;
+}
+
+.room-item.private:hover {
+  background-color: #4a4a4a;
+  border-color: #ff9800;
+}
+
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-code {
+  font-weight: bold;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.lock-icon {
+  font-size: 16px;
+}
+
+.room-status {
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.room-item.private .room-status {
+  background-color: #ff9800;
+  color: #000;
+}
+
+.room-item.public .room-status {
+  background-color: #4a9eff;
+  color: white;
+}
+
+.room-details {
+  color: #cccccc;
+  font-size: 14px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h3 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 20px;
+}
+
+.modal-content p {
+  margin: 0 0 16px 0;
+  color: #cccccc;
+}
+
+.modal-content input {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.modal-buttons button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.modal-buttons button:first-child {
+  background-color: #666;
+  color: white;
+}
+
+.modal-buttons button:first-child:hover {
+  background-color: #777;
+}
+
+.modal-buttons .join-button {
+  background-color: #4a9eff;
+  color: white;
+}
+
+.modal-buttons .join-button:hover:not(:disabled) {
+  background-color: #3a8eff;
+}
+
+.modal-buttons .join-button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+/* Game Board */
+.game-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.cell {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.cell.empty {
+  background-color: #3a3a3a;
+  border: 2px solid #555;
+}
+
+.cell.current {
+  background-color: #4a4a4a;
+  border: 2px solid #777;
+  color: #ffffff;
+}
+
+.cell.correct {
+  background-color: #4caf50;
+  border: 2px solid #4caf50;
+  color: #ffffff;
+}
+
+.cell.present {
+  background-color: #ff9800;
+  border: 2px solid #ff9800;
+  color: #ffffff;
+}
+
+.cell.absent {
+  background-color: #222222;
+  border: 2px solid #333;
+  color: #ffffff;
+}
+
+/* Virtual Keyboard */
+.virtual-keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 500px;
+  width: 100%;
+}
+
+.keyboard-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.key {
+  min-width: 40px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.key.letter {
+  background-color: #3a3a3a;
+  color: #ffffff;
+  flex: 1;
+}
+
+.key.letter:hover {
+  background-color: #4a4a4a;
+}
+
+.key.letter:active {
+  background-color: #2a2a2a;
+}
+
+.key.enter {
+  background-color: #4caf50;
+  color: white;
+  flex: 1.5;
+}
+
+.key.enter:hover {
+  background-color: #45a049;
+}
+
+.key.backspace {
+  background-color: #f44336;
+  color: white;
+  flex: 1.5;
+}
+
+.key.backspace:hover {
+  background-color: #d32f2f;
+}
+
+/* Keyboard key status colors */
+.key.correct {
+  background-color: #4caf50 !important;
+  color: white !important;
+}
+
+.key.present {
+  background-color: #ff9800 !important;
+  color: white !important;
+}
+
+.key.absent {
+  background-color: #222222 !important;
+  color: white !important;
+}
+
+.key.unused {
+  background-color: #666;
+  color: #ffffff;
+}
+
+/* Error Modal */
+.error-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.error-modal {
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.error-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.error-modal h3 {
+  margin: 0 0 12px 0;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.error-modal p {
+  margin: 0 0 20px 0;
+  color: #cccccc;
+  line-height: 1.5;
+}
+
+.error-close-button {
+  background-color: #4a9eff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.error-close-button:hover {
+  background-color: #3a8eff;
+}
+
+/* Keyboard Section */
+.keyboard-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.keyboard-hint {
+  color: #cccccc;
+  font-size: 14px;
+  text-align: center;
+  padding: 8px 16px;
+  background-color: #333;
+  border-radius: 8px;
+  border: 1px solid #555;
+}
+
+/* Game Finished Message */
+.game-finished-message {
+  text-align: center;
+  padding: 20px;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 100%;
+}
+
+.game-finished-message h3 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 24px;
+}
+
+.game-finished-message p {
+  margin: 0;
+  color: #cccccc;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .room-forms {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .cell {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+
+  .key {
+    min-width: 35px;
+    height: 45px;
+    font-size: 14px;
+  }
+
+  .room-content {
+    padding: 20px;
+  }
+
+  .room-content h1 {
+    font-size: 28px;
+  }
+
+  .connection-content {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cell {
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
+  }
+
+  .key {
+    min-width: 30px;
+    height: 40px;
+    font-size: 12px;
+  }
+
+  .keyboard-row {
+    gap: 4px;
+  }
+}

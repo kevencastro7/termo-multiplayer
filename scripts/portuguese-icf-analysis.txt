@@ -1,0 +1,33 @@
+🇵🇹 Portuguese 5-Letter Word ICF Analysis
+==================================================
+
+📊 Total 5-letter words analyzed: 12124
+
+📈 ICF Range Distribution:
+------------------------------
+0-5 ICF: 0 words (0.0%) - Very common
+
+5-10 ICF: 450 words (3.7%) - Common
+  Examples: muito(6.1), sobre(6.3), mesmo(6.6), todos(6.6), ainda(6.7)
+
+10-15 ICF: 3543 words (29.2%) - Moderately common
+  Examples: solar(10.0), mudou(10.0), couro(10.0), redor(10.0), ritmo(10.0)
+
+15-20 ICF: 5846 words (48.2%) - Less common
+  Examples: lunga(15.0), igaci(15.0), ébola(15.0), casem(15.0), supôs(15.0)
+
+20+ ICF: 2285 words (18.8%) - Rare
+  Examples: baenã(20.0), vaiai(20.0), goleá(20.0), penem(20.0), tolhi(20.0)
+
+📋 Additional Statistics:
+-------------------------
+Average ICF: 16.59
+Minimum ICF: 6.14
+Maximum ICF: 24.74
+
+🎯 Recommendations for Termo Game:
+-----------------------------------
+• Use 5-15 ICF range for balanced difficulty
+• Avoid 0-5 range (too common/easy)
+• Consider 10-20 range for challenging gameplay
+• Mix ranges for varied difficulty levels
