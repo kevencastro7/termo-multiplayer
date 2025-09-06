@@ -126,7 +126,7 @@ const Game: React.FC = () => {
               <div className="rankings-section">
                 <h4>Classificação Final</h4>
                 <div className="rankings-list">
-                  {state.rankings.map((ranking, index) => (
+                  {state.rankings.map((ranking, _index) => (
                     <div
                       key={ranking.playerId}
                       className={`ranking-item ${ranking.playerId === state.currentPlayer?.id ? 'current-player' : ''}`}

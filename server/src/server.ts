@@ -4,6 +4,7 @@ import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import path from 'path';
 import { RoomService } from './services/roomService';
 import { GameService } from './services/gameService';
 import { Player } from './models/Player';
@@ -22,6 +23,11 @@ app.use(helmet());
 app.use(compression());
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from client build in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client')));
+}
 
 // Environment variables
 const PORT = process.env.PORT || 3001;
@@ -284,6 +290,13 @@ app.get('/api/rooms', (req, res) => {
   const publicRooms = RoomService.getPublicRooms();
   res.json(publicRooms);
 });
+
+// Serve React app for all other routes (client-side routing)
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/index.html'));
+  });
+}
 
 // Start server
 server.listen(PORT, () => {
