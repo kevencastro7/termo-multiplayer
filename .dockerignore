@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+*/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+server/dist
+client/dist
+dist
+
+# Development files
+.env.local
+.env.development
+.env.test
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scripts and docs
+scripts/
+*.md
+!README.md
+
+# Logs
+logs
+*.log
