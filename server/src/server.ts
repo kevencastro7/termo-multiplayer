@@ -13,8 +13,9 @@ const app = express();
 const server = createServer(app);
 const io = new SocketServer(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: process.env.NODE_ENV === 'production' ? true : process.env.CLIENT_URL || "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -24,13 +25,14 @@ app.use(compression());
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from client build in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../client/dist')));
-}
-
 // Environment variables
 const PORT = process.env.PORT || 3001;
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Serve static files from client build in production
+if (isProduction) {
+  app.use(express.static(path.join(__dirname, '../../client/dist')));
+}
 
 // Store connected players (socketId -> playerId)
 const connectedPlayers = new Map<string, string>();
@@ -292,7 +294,7 @@ app.get('/api/rooms', (req, res) => {
 });
 
 // Serve React app for all other routes (client-side routing)
-if (process.env.NODE_ENV === 'production') {
+if (isProduction) {
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
   });
