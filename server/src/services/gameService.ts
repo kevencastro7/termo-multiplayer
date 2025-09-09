@@ -6,11 +6,11 @@ export class GameService {
   /**
    * Validate a guess and return the result
    */
-  static validateGuess(guess: string, targetWord: string): LetterResult[] {
+  static async validateGuess(guess: string, targetWord: string): Promise<LetterResult[]> {
     const normalizedGuess = WordService.normalizeWord(guess);
     const normalizedTarget = WordService.normalizeWord(targetWord);
 
-    if (!WordService.isValidGuess(guess)) {
+    if (!(await WordService.isValidGuess(guess))) {
       throw new Error('Palavra inválida');
     }
 

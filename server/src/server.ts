@@ -131,7 +131,7 @@ io.on('connection', (socket) => {
   });
 
   // Submit guess
-  socket.on('submit-guess', (data: { roomId: string; playerId: string; guess: string }) => {
+  socket.on('submit-guess', async (data: { roomId: string; playerId: string; guess: string }) => {
     try {
       const room = RoomService.getRoom(data.roomId);
       if (!room || !room.game) {
@@ -146,7 +146,7 @@ io.on('connection', (socket) => {
       }
 
       // Validate guess
-      const result = GameService.validateGuess(data.guess, room.game.targetWord);
+      const result = await GameService.validateGuess(data.guess, room.game.targetWord);
       const guess = GameService.createGuess(data.guess, result);
       const updatedPlayer = GameService.updatePlayerAfterGuess(player, guess);
 
