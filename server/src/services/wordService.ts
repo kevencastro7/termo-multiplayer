@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const WORDS_FILE_PATH = path.join(__dirname, '../../top-5000-portuguese-words.txt');
+const WORDS_FILE_PATH = path.join(__dirname, '../../filtered-portuguese-words.txt');
 
 export class WordService {
   private static words: string[] | null = null;
