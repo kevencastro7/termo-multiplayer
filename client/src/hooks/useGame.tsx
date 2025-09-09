@@ -5,6 +5,8 @@ interface Player {
   id: string;
   name: string;
   isLeader: boolean;
+  currentRow?: number;
+  status?: 'playing' | 'won' | 'lost';
 }
 
 interface GuessResult {
@@ -47,6 +49,7 @@ interface GameState {
   // UI state
   showError: boolean;
   errorMessage: string;
+  validationMessage: string;
   isLoading: boolean;
 }
 
@@ -56,6 +59,8 @@ type GameAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_VALIDATION_MESSAGE'; payload: string }
+  | { type: 'CLEAR_VALIDATION_MESSAGE' }
   | { type: 'ROOM_CREATED'; payload: { room: any; player: Player } }
   | { type: 'ROOM_JOINED'; payload: { room: any; player: Player } }
   | { type: 'PLAYER_JOINED'; payload: { player: Player; players: Player[]; playerCount: number } }
@@ -84,6 +89,7 @@ const initialState: GameState = {
   rankings: [],
   showError: false,
   errorMessage: '',
+  validationMessage: '',
   isLoading: false,
 };
 
@@ -108,6 +114,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'CLEAR_ERROR':
       return { ...state, showError: false, errorMessage: '' };
+
+    case 'SET_VALIDATION_MESSAGE':
+      return { ...state, validationMessage: action.payload };
+
+    case 'CLEAR_VALIDATION_MESSAGE':
+      return { ...state, validationMessage: '' };
 
     case 'ROOM_CREATED':
       return {
@@ -182,8 +194,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
 
     case 'PLAYER_PROGRESS':
-      // Update other players' progress (we don't store their guesses, just progress)
-      return state;
+      // Update other players' progress with current row and status
+      return {
+        ...state,
+        players: state.players.map(player =>
+          player.id === action.payload.playerId
+            ? {
+                ...player,
+                currentRow: action.payload.currentRow,
+                status: action.payload.status as 'playing' | 'won' | 'lost'
+              }
+            : player
+        )
+      };
 
     case 'GAME_FINISHED':
       return {
@@ -312,6 +335,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_ERROR', payload: data.message });
     };
 
+    const handleValidationMessage = (data: any) => {
+      dispatch({ type: 'SET_VALIDATION_MESSAGE', payload: data.message });
+      setTimeout(function() {
+         dispatch({ type: 'CLEAR_VALIDATION_MESSAGE' });
+      }, 500)
+     
+    };
+
     socket.on('room-created', handleRoomCreated);
     socket.on('room-joined', handleRoomJoined);
     socket.on('player-joined', handlePlayerJoined);
@@ -324,6 +355,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     socket.on('game-ended-no-results', handleGameEndedNoResults);
     socket.on('game-reset', handleGameReset);
     socket.on('error', handleError);
+    socket.on('validation-message', handleValidationMessage);
 
     return () => {
       socket.off('room-created', handleRoomCreated);
@@ -338,6 +370,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       socket.off('game-ended-no-results', handleGameEndedNoResults);
       socket.off('game-reset', handleGameReset);
       socket.off('error', handleError);
+      socket.off('validation-message', handleValidationMessage);
     };
   }, [socket]);
 
@@ -383,7 +416,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }
 
       if (guess.length !== 5) {
-        dispatch({ type: 'SET_ERROR', payload: 'Palavra deve ter 5 letras' });
+        dispatch({ type: 'SET_VALIDATION_MESSAGE', payload: 'Palavra deve ter 5 letras' });
         return;
       }
 

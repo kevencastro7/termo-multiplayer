@@ -12,11 +12,19 @@ const Game: React.FC = () => {
   const { connect } = useSocket();
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [cursorPosition, setCursorPosition] = useState<number>(0);
 
   // Auto-connect on mount
   useEffect(() => {
     connect();
   }, [connect]);
+
+  // Reset cursor to first tile when moving to a new guess
+  useEffect(() => {
+    if (state.gameStatus === 'playing') {
+      setCursorPosition(0); // Always select first tile on new guess
+    }
+  }, [state.currentRow, state.gameStatus]);
 
   const handleCreateRoom = (playerName: string, password?: string) => {
     actions.createRoom(playerName, password);
@@ -40,9 +48,24 @@ const Game: React.FC = () => {
         actions.submitGuess(state.currentGuess);
       }
     } else if (key === 'BACKSPACE') {
-      actions.updateCurrentGuess(state.currentGuess.slice(0, -1));
-    } else if (state.currentGuess.length < 5 && key.match(/^[A-Z]$/)) {
-      actions.updateCurrentGuess(state.currentGuess + key);
+      if (cursorPosition >= 0) {
+        // Replace character at current cursor position with empty space
+        // Pad the current guess to 5 characters to maintain positions
+        const paddedGuess = state.currentGuess.padEnd(5, ' ');
+        const newGuess = paddedGuess.slice(0, cursorPosition) + ' ' + paddedGuess.slice(cursorPosition + 1);
+        actions.updateCurrentGuess(newGuess.trimRight());
+        setCursorPosition(Math.max(0, cursorPosition - 1));
+      }
+    } else if (cursorPosition < 5 && key.match(/^[A-Z]$/)) {
+      // Insert character at cursor position - always allow typing at any position
+      // Pad the current guess to 5 characters to maintain positions
+      const paddedGuess = state.currentGuess.padEnd(5, ' ');
+      const newGuess = paddedGuess.slice(0, cursorPosition) + key + paddedGuess.slice(cursorPosition + 1);
+      actions.updateCurrentGuess(newGuess.trimRight());
+      // Only move cursor if not at the last position
+      if (cursorPosition < 4) {
+        setCursorPosition(cursorPosition + 1);
+      }
     }
   };
 
@@ -75,14 +98,6 @@ const Game: React.FC = () => {
           {state.isLeader && <span className="leader-badge">Líder</span>}
         </div>
 
-        <div className="players-list">
-          {state.players.map(player => (
-            <div key={player.id} className={`player-item ${player.isLeader ? 'leader' : ''}`}>
-              <span className="player-name">{player.name}</span>
-              {player.isLeader && <span className="crown">👑</span>}
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="game-content">
@@ -108,13 +123,22 @@ const Game: React.FC = () => {
         )}
 
         {(state.gameStatus === 'playing' || state.gameStatus === 'finished') && (
-          <GameBoard
-            guesses={state.guesses}
-            currentGuess={state.currentGuess}
-            currentRow={state.currentRow}
-            gameStatus={state.gameStatus}
-            onKeyPress={handleKeyPress}
-          />
+          <>
+            {state.validationMessage && (
+              <div className="validation-message">
+                {state.validationMessage}
+              </div>
+            )}
+            <GameBoard
+              guesses={state.guesses}
+              currentGuess={state.currentGuess}
+              currentRow={state.currentRow}
+              gameStatus={state.gameStatus}
+              onKeyPress={handleKeyPress}
+              cursorPosition={cursorPosition}
+              onTileClick={setCursorPosition}
+            />
+          </>
         )}
 
         {state.gameStatus === 'finished' && (
@@ -159,6 +183,21 @@ const Game: React.FC = () => {
             )}
           </div>
         )}
+      </div>
+
+      {/* Player List at Bottom */}
+      <div className="players-list-bottom">
+        {state.players.map(player => (
+          <div key={player.id} className={`player-item ${player.isLeader ? 'leader' : ''}`}>
+            <span className="player-name">{player.name}</span>
+            {player.isLeader && <span className="crown">👑</span>}
+            {state.gameStatus === 'playing' && player.currentRow !== undefined && (
+              <span className="player-progress">
+                {player.status === 'won' ? '✅' : player.status === 'lost' ? '❌' : `Tentativa ${player.currentRow + 1}`}
+              </span>
+            )}
+          </div>
+        ))}
       </div>
 
       {state.showError && (

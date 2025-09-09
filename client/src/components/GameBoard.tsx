@@ -11,7 +11,9 @@ interface GameBoardProps {
   currentGuess: string;
   currentRow: number;
   gameStatus: 'waiting' | 'playing' | 'finished';
-  onKeyPress: (key: string) => void;
+  onKeyPress: (key: string, cursorPosition?: number) => void;
+  cursorPosition: number;
+  onTileClick: (position: number) => void;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -19,8 +21,17 @@ const GameBoard: React.FC<GameBoardProps> = ({
   currentGuess,
   currentRow,
   gameStatus,
-  onKeyPress
+  onKeyPress,
+  cursorPosition,
+  onTileClick
 }) => {
+  // Handle tile click to set cursor position
+  const handleTileClick = (position: number) => {
+    if (gameStatus === 'playing') {
+      onTileClick(position);
+    }
+  };
+
   // Handle physical keyboard input
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -29,7 +40,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       const key = event.key.toUpperCase();
 
       // Allow A-Z and accented Portuguese characters for input
-      if (key.match(/^[A-ZÇÃÕÂÊÔÎÛÁÉÍÓÚÀÈÌÒÙÄËÏÖÜáàãâäéèêëíìîïóòõôöúùûüç]$/) && currentGuess.length < 5) {
+      if (key.match(/^[A-ZÇÃÕÂÊÔÎÛÁÉÍÓÚÀÈÌÒÙÄËÏÖÜáàãâäéèêëíìîïóòõôöúùûüç]$/)) {
         onKeyPress(key);
       }
       // Handle backspace
@@ -70,10 +81,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
           status = letter ? 'current' : 'empty';
         }
 
+        const isSelected = row === currentRow && col === cursorPosition && gameStatus === 'playing';
+        
         cells.push(
           <div
             key={`${row}-${col}`}
-            className={`cell ${status}`}
+            className={`cell ${status} ${isSelected ? 'selected' : ''}`}
+            onClick={() => handleTileClick(col)}
           >
             {letter}
           </div>

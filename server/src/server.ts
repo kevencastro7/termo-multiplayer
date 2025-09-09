@@ -181,7 +181,7 @@ io.on('connection', (socket) => {
 
       console.log(`Player ${player.name} guessed: ${data.guess}`);
     } catch (error) {
-      socket.emit('error', { message: (error as Error).message });
+      socket.emit('validation-message', { message: (error as Error).message });
     }
   });
 
