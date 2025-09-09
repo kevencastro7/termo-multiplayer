@@ -29,7 +29,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const connect = () => {
     if (socketRef.current?.connected) return;
 
-    socketRef.current = io('http://localhost:3001', {
+    const serverUrl = window.location.origin;
+    socketRef.current = io(serverUrl, {
       transports: ['websocket', 'polling'],
       upgrade: true,
     });
