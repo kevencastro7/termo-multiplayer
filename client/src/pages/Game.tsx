@@ -49,12 +49,24 @@ const Game: React.FC = () => {
       }
     } else if (key === 'BACKSPACE') {
       if (cursorPosition >= 0) {
-        // Replace character at current cursor position with empty space
         // Pad the current guess to 5 characters to maintain positions
         const paddedGuess = state.currentGuess.padEnd(5, ' ');
-        const newGuess = paddedGuess.slice(0, cursorPosition) + ' ' + paddedGuess.slice(cursorPosition + 1);
-        actions.updateCurrentGuess(newGuess.trimRight());
-        setCursorPosition(Math.max(0, cursorPosition - 1));
+        
+        // Check if current position has a letter (not space)
+        const currentChar = paddedGuess[cursorPosition];
+        const hasLetterAtCurrent = currentChar !== ' ';
+        
+        if (hasLetterAtCurrent) {
+          // Delete letter at current position and keep focus on same tile
+          const newGuess = paddedGuess.slice(0, cursorPosition) + ' ' + paddedGuess.slice(cursorPosition + 1);
+          actions.updateCurrentGuess(newGuess.trimRight());
+          // Keep cursor at same position
+        } else if (cursorPosition > 0) {
+          // Current position is empty, delete previous letter and focus on that tile
+          const newGuess = paddedGuess.slice(0, cursorPosition - 1) + ' ' + paddedGuess.slice(cursorPosition);
+          actions.updateCurrentGuess(newGuess.trimRight());
+          setCursorPosition(cursorPosition - 1);
+        }
       }
     } else if (cursorPosition < 5 && key.match(/^[A-Z]$/)) {
       // Insert character at cursor position - always allow typing at any position
