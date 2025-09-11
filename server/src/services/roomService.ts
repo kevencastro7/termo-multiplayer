@@ -102,47 +102,7 @@ export class RoomService {
   }
 
   /**
-   * Mark player as disconnected (temporary disconnection)
-   */
-  static markPlayerDisconnected(roomId: string, playerId: string): { room: Room | null; destroyed: boolean; reason?: string } {
-    const room = this.rooms.get(roomId);
-    if (!room) return { room: null, destroyed: false };
-
-    const player = room.players.find(p => p.id === playerId);
-    if (!player) return { room, destroyed: false };
-
-    // Mark player as disconnected with timestamp
-    player.isDisconnected = true;
-    player.disconnectedAt = new Date();
-
-    // If leader disconnected, assign temporary leadership
-    if (player.isLeader) {
-      this.assignTemporaryLeader(room, playerId);
-    }
-
-    return { room, destroyed: false };
-  }
-
-  /**
-   * Reconnect a player who was temporarily disconnected
-   */
-  static reconnectPlayer(roomId: string, playerId: string, socketId: string): { room: Room | null; player: Player | null } {
-    const room = this.rooms.get(roomId);
-    if (!room) return { room: null, player: null };
-
-    const player = room.players.find(p => p.id === playerId);
-    if (!player) return { room, player: null };
-
-    // Update socket ID and clear disconnection status
-    player.socketId = socketId;
-    player.isDisconnected = false;
-    player.disconnectedAt = undefined;
-
-    return { room, player };
-  }
-
-  /**
-   * Remove a player from a room (permanent removal)
+   * Remove a player from a room
    */
   static removePlayer(roomId: string, playerId: string): { room: Room | null; destroyed: boolean; reason?: string } {
     const room = this.rooms.get(roomId);
@@ -330,25 +290,6 @@ export class RoomService {
   }
 
   /**
-   * Assign temporary leader when leader disconnects
-   */
-  private static assignTemporaryLeader(room: Room, disconnectedLeaderId: string): void {
-    if (room.players.length === 0) return;
-
-    // Find the first connected player who is not the disconnected leader
-    const newLeader = room.players.find(player => 
-      player.id !== disconnectedLeaderId && !player.isDisconnected
-    );
-
-    if (newLeader) {
-      // Update leadership
-      room.players.forEach(player => {
-        player.isLeader = player.id === newLeader.id;
-      });
-    }
-  }
-
-  /**
    * Assign new leader to room
    */
   private static assignNewLeader(room: Room): void {
@@ -402,40 +343,14 @@ export class RoomService {
   }
 
   /**
-   * Clean up inactive rooms and disconnected players (call periodically)
+   * Clean up inactive rooms (call periodically)
    */
   static cleanupInactiveRooms(): void {
     const now = new Date();
-    const roomTimeout = 30 * 60 * 1000; // 30 minutes for empty rooms
-    const disconnectTimeout = 2 * 60 * 1000; // 2 minutes for disconnected players
+    const timeout = 30 * 60 * 1000; // 30 minutes
 
     for (const [roomId, room] of this.rooms) {
-      // Clean up empty rooms
-      if (now.getTime() - room.createdAt.getTime() > roomTimeout && room.players.length === 0) {
-        this.deleteRoom(roomId);
-        continue;
-      }
-
-      // Clean up permanently disconnected players
-      const playersToRemove: string[] = [];
-      
-      for (const player of room.players) {
-        if (player.isDisconnected && player.disconnectedAt) {
-          const timeDisconnected = now.getTime() - player.disconnectedAt.getTime();
-          if (timeDisconnected > disconnectTimeout) {
-            playersToRemove.push(player.id);
-          }
-        }
-      }
-
-      // Remove players who have been disconnected too long
-      for (const playerId of playersToRemove) {
-        this.removePlayer(roomId, playerId);
-        console.log(`Permanently removed disconnected player ${playerId} from room ${room.code}`);
-      }
-
-      // If room becomes empty after cleanup, delete it
-      if (room.players.length === 0) {
+      if (now.getTime() - room.createdAt.getTime() > timeout && room.players.length === 0) {
         this.deleteRoom(roomId);
       }
     }
