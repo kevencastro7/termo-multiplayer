@@ -8,7 +8,8 @@ import * as path from 'path';
 const WORDS_FILE_PATH = path.join(__dirname, '../../filtered-portuguese-words.txt');
 
 export class WordService {
-  private static words: string[] | null = null;
+  private static allWords: string[] | null = null; // All words for validation
+  private static targetWords: string[] | null = null; // First 2000 words for target selection
   private static validGuesses: Set<string> | null = null;
   private static normalizedMap: Map<string, string> | null = null;
   private static initialized = false;
@@ -17,7 +18,7 @@ export class WordService {
    * Load words from file (lazy loading)
    */
   private static async loadWordsFromFile(): Promise<void> {
-    if (this.words !== null) return; // Already loaded
+    if (this.allWords !== null) return; // Already loaded
 
     try {
       const fileContent = fs.readFileSync(WORDS_FILE_PATH, 'utf8');
@@ -26,13 +27,16 @@ export class WordService {
         .map(word => word.trim())
         .filter(word => word.length === 5 && word.length > 0);
 
-      this.words = words;
+      this.allWords = words;
+      this.targetWords = words.slice(0, 2000); // First 2000 words for target selection
       this.validGuesses = new Set(words);
       console.log(`✅ Loaded ${words.length} Portuguese words from file`);
+      console.log(`✅ Using first ${this.targetWords.length} words for target selection`);
     } catch (error) {
       console.error('❌ Error loading words file:', error);
       // Fallback to empty arrays
-      this.words = [];
+      this.allWords = [];
+      this.targetWords = [];
       this.validGuesses = new Set();
     }
   }
@@ -54,8 +58,8 @@ export class WordService {
     if (this.normalizedMap !== null) return;
 
     this.normalizedMap = new Map();
-    if (this.words) {
-      this.words.forEach(word => {
+    if (this.allWords) {
+      this.allWords.forEach(word => {
         const normalized = this.normalizeWord(word);
         this.normalizedMap!.set(normalized, word);
       });
@@ -63,17 +67,17 @@ export class WordService {
   }
 
   /**
-   * Get a random word for the game
+   * Get a random word for the game (from first 2000 words only)
    */
   static async getRandomWord(): Promise<string> {
     await this.ensureLoaded();
-    if (!this.words || this.words.length === 0) return '';
-    const randomIndex = Math.floor(Math.random() * this.words.length);
-    return this.words[randomIndex].toUpperCase();
+    if (!this.targetWords || this.targetWords.length === 0) return '';
+    const randomIndex = Math.floor(Math.random() * this.targetWords.length);
+    return this.targetWords[randomIndex].toUpperCase();
   }
 
   /**
-   * Check if a word is valid for guessing (supports accent normalization)
+   * Check if a word is valid for guessing (supports accent normalization, uses all words)
    */
   static async isValidGuess(word: string): Promise<boolean> {
     await this.ensureLoaded();
@@ -92,11 +96,11 @@ export class WordService {
   }
 
   /**
-   * Check if a word is in the solution dictionary
+   * Check if a word is in the solution dictionary (target words only)
    */
   static async isValidSolution(word: string): Promise<boolean> {
     await this.ensureLoaded();
-    return this.words?.includes(word.toLowerCase()) || false;
+    return this.targetWords?.includes(word.toLowerCase()) || false;
   }
 
   /**
@@ -104,7 +108,15 @@ export class WordService {
    */
   static async getAllWords(): Promise<string[]> {
     await this.ensureLoaded();
-    return this.words ? [...this.words] : [];
+    return this.allWords ? [...this.allWords] : [];
+  }
+
+  /**
+   * Get target words (first 2000 words)
+   */
+  static async getTargetWords(): Promise<string[]> {
+    await this.ensureLoaded();
+    return this.targetWords ? [...this.targetWords] : [];
   }
 
   /**
@@ -112,7 +124,15 @@ export class WordService {
    */
   static async getWordCount(): Promise<number> {
     await this.ensureLoaded();
-    return this.words?.length || 0;
+    return this.allWords?.length || 0;
+  }
+
+  /**
+   * Get target word count
+   */
+  static async getTargetWordCount(): Promise<number> {
+    await this.ensureLoaded();
+    return this.targetWords?.length || 0;
   }
 
   /**
