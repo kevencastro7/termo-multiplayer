@@ -9,6 +9,8 @@ export interface Player {
   joinTime: Date;
   finishTime?: Date;
   currentRow: number;
+  disconnectedAt?: Date; // Track when player disconnected
+  isDisconnected?: boolean; // Flag for temporary disconnection
 }
 
 export interface Guess {

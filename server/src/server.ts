@@ -206,6 +206,56 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Reconnect player
+  socket.on('reconnect-player', (data: { roomId: string; playerId: string }) => {
+    try {
+      const result = RoomService.reconnectPlayer(data.roomId, data.playerId, socket.id);
+
+      if (!result.room || !result.player) {
+        socket.emit('error', { message: 'Não foi possível reconectar' });
+        return;
+      }
+
+      // Update connected players map
+      connectedPlayers.set(socket.id, data.playerId);
+      socket.join(data.roomId);
+
+      // Send room state to reconnected player
+      socket.emit('room-reconnected', {
+        room: {
+          id: result.room.id,
+          code: result.room.code,
+          players: result.room.players.map(p => ({ 
+            id: p.id, 
+            name: p.name, 
+            isLeader: p.isLeader,
+            isDisconnected: p.isDisconnected 
+          })),
+          status: result.room.status,
+          playerCount: result.room.players.length
+        },
+        player: result.player
+      });
+
+      // Notify other players about reconnection
+      socket.to(data.roomId).emit('player-reconnected', {
+        playerId: data.playerId,
+        playerName: result.player.name,
+        players: result.room.players.map(p => ({ 
+          id: p.id, 
+          name: p.name, 
+          isLeader: p.isLeader,
+          isDisconnected: p.isDisconnected 
+        })),
+        playerCount: result.room.players.length
+      });
+
+      console.log(`Player reconnected: ${result.player.name} to room: ${result.room.code}`);
+    } catch (error) {
+      socket.emit('error', { message: (error as Error).message });
+    }
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
     const playerId = connectedPlayers.get(socket.id);
@@ -215,46 +265,24 @@ io.on('connection', (socket) => {
       for (const room of rooms) {
         const player = room.players.find(p => p.id === playerId);
         if (player) {
-          const result = RoomService.removePlayer(room.id, playerId);
+          // Mark player as temporarily disconnected instead of removing immediately
+          const result = RoomService.markPlayerDisconnected(room.id, playerId);
 
-          if (result.destroyed) {
-            // Room was destroyed
-            if (result.reason === 'leader_left') {
-              // Notify all players in the room that it was destroyed
-              io.to(room.id).emit('room-destroyed', {
-                reason: 'leader_left',
-                message: 'Sala fechada - líder saiu'
-              });
-              console.log(`Room destroyed because leader left: ${room.code}`);
-            }
-          } else if (result.room) {
-            // Room still exists, normal player left notification
-            io.to(room.id).emit('player-left', {
+          if (result.room) {
+            // Notify other players about the temporary disconnection
+            io.to(room.id).emit('player-disconnected', {
               playerId,
               playerName: player.name,
-              players: result.room.players.map(p => ({ id: p.id, name: p.name, isLeader: p.isLeader })),
-              playerCount: result.room.players.length,
-              newLeader: result.room.players.find(p => p.isLeader)?.name
+              players: result.room.players.map(p => ({ 
+                id: p.id, 
+                name: p.name, 
+                isLeader: p.isLeader,
+                isDisconnected: p.isDisconnected 
+              })),
+              playerCount: result.room.players.length
             });
 
-            // If there's an active game, mark the disconnected player as lost
-            if (result.room.game && result.room.game.status === 'playing') {
-              const gamePlayerIndex = result.room.game.players.findIndex(p => p.id === playerId);
-              if (gamePlayerIndex !== -1) {
-                // Mark player as lost in the game
-                result.room.game.players[gamePlayerIndex].status = 'lost';
-                result.room.game.players[gamePlayerIndex].finishTime = new Date();
-
-                // Check if game should end now
-                const gameEndResult = RoomService.checkGameEnd(room.id);
-                if (gameEndResult.shouldEnd) {
-                  io.to(room.id).emit('game-finished', {
-                    rankings: gameEndResult.rankings
-                  });
-                  console.log(`Game finished after player ${player.name} disconnected: ${room.code}`);
-                }
-              }
-            }
+            console.log(`Player temporarily disconnected: ${player.name} from room: ${room.code}`);
           }
           break;
         }
