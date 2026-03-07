@@ -1,32 +1,37 @@
 .game-container {
   max-width: 1200px;
+  width: min(100%, 1200px);
   margin: 0 auto;
-  padding: 20px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
+  overflow-x: hidden;
 }
 
 .game-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  width: 100%;
+  max-width: 100%;
+  padding: 12px 14px;
   background-color: #2a2a2a;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  gap: 12px;
 }
 
 .room-info h2 {
   margin: 0 0 8px 0;
   color: #ffffff;
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .room-info p {
   margin: 0;
   color: #cccccc;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .leader-badge {
@@ -77,20 +82,26 @@
 .players-list-bottom {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 20px;
-  padding: 16px;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 12px;
   background-color: #2a2a2a;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-height: 180px;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 100%;
 }
 
 .game-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  min-height: 400px;
+  gap: 12px;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .waiting-screen {
@@ -101,6 +112,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   max-width: 500px;
   width: 100%;
+  overflow-x: hidden;
 }
 
 .waiting-screen h3 {
@@ -119,9 +131,9 @@
   background-color: #4a9eff;
   color: white;
   border: none;
-  padding: 16px 32px;
+  padding: 12px 18px;
   border-radius: 8px;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -177,6 +189,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   max-width: 500px;
   width: 100%;
+  overflow-x: hidden;
 }
 
 .finished-screen h3 {
@@ -212,16 +225,21 @@
 
 /* Rankings Display */
 .rankings-section {
-  margin-top: 30px;
-  padding: 20px;
+  margin-top: 16px;
+  padding: 12px;
   background-color: #333;
   border-radius: 8px;
+  width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .rankings-section h4 {
   margin: 0 0 16px 0;
   color: #ffffff;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .rankings-list {
@@ -233,8 +251,8 @@
 .ranking-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
+  gap: 10px;
+  padding: 10px;
   background-color: #3a3a3a;
   border-radius: 8px;
   border: 2px solid transparent;
@@ -247,8 +265,8 @@
 }
 
 .rank-position {
-  font-size: 24px;
-  min-width: 40px;
+  font-size: 20px;
+  min-width: 32px;
   text-align: center;
 }
 
@@ -260,14 +278,14 @@
 .player-name {
   display: block;
   color: #ffffff;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: bold;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .player-stats {
   color: #cccccc;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .rank-badge {
@@ -275,10 +293,34 @@
 }
 
 @media (max-width: 768px) {
+  .game-container {
+    padding: 8px;
+  }
+
+  .game-header {
+    flex-direction: column;
+    padding: 10px;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .start-button, .reset-button {
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  .room-info h2 {
+    font-size: 18px;
+  }
+
+  .players-list-bottom {
+    max-height: 140px;
+  }
+
   .ranking-item {
     flex-direction: column;
     text-align: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .rank-position {
@@ -287,5 +329,58 @@
 
   .player-info {
     text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-container {
+    padding: 6px;
+    gap: 8px;
+  }
+
+  .game-header {
+    padding: 8px;
+    border-radius: 10px;
+  }
+
+  .room-info h2 {
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+
+  .room-info p {
+    font-size: 12px;
+  }
+
+  .leader-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+
+  .players-list-bottom {
+    padding: 8px;
+    max-height: 120px;
+  }
+
+  .player-item {
+    padding: 6px 8px;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .player-progress {
+    font-size: 10px;
+    margin-left: 4px;
+  }
+
+  .rankings-section {
+    padding: 10px;
+    max-height: 220px;
+  }
+
+  .rankings-section h4,
+  .finished-screen h3,
+  .waiting-screen h3 {
+    font-size: 16px;
   }
 }
