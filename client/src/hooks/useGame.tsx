@@ -65,6 +65,7 @@ type GameAction =
   | { type: 'ROOM_JOINED'; payload: { room: any; player: Player } }
   | { type: 'PLAYER_JOINED'; payload: { player: Player; players: Player[]; playerCount: number } }
   | { type: 'PLAYER_LEFT'; payload: { players: Player[]; playerCount: number; newLeader?: string } }
+  | { type: 'LEFT_ROOM' }
   | { type: 'ROOM_DESTROYED'; payload: { reason: string; message: string } }
   | { type: 'GAME_STARTED'; payload: { gameId: string; startTime: Date; timeLimit?: number } }
   | { type: 'GUESS_RESULT'; payload: GuessResult & { currentRow: number; status: string } }
@@ -160,6 +161,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         isLeader: action.payload.newLeader ? state.currentPlayer?.name === action.payload.newLeader : state.isLeader,
       };
 
+    case 'LEFT_ROOM':
+      return {
+        ...state,
+        roomId: null,
+        roomCode: null,
+        players: [],
+        playerCount: 0,
+        currentPlayer: null,
+        isLeader: false,
+        gameStatus: 'waiting',
+        currentGuess: '',
+        guesses: [],
+        currentRow: 0,
+        rankings: [],
+        isLoading: false,
+      };
+
     case 'ROOM_DESTROYED':
       return {
         ...state,
@@ -251,6 +269,7 @@ interface GameContextType {
     startGame: () => void;
     submitGuess: (guess: string) => void;
     resetGame: () => void;
+    leaveRoom: () => void;
     updateCurrentGuess: (guess: string) => void;
     clearError: () => void;
   };
@@ -307,6 +326,10 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       dispatch({ type: 'ROOM_DESTROYED', payload: data });
     };
 
+    const handleLeftRoom = () => {
+      dispatch({ type: 'LEFT_ROOM' });
+    };
+
     const handleGameStarted = (data: any) => {
       dispatch({ type: 'GAME_STARTED', payload: data });
     };
@@ -348,6 +371,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     socket.on('player-joined', handlePlayerJoined);
     socket.on('player-left', handlePlayerLeft);
     socket.on('room-destroyed', handleRoomDestroyed);
+    socket.on('left-room', handleLeftRoom);
     socket.on('game-started', handleGameStarted);
     socket.on('guess-result', handleGuessResult);
     socket.on('player-progress', handlePlayerProgress);
@@ -363,6 +387,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       socket.off('player-joined', handlePlayerJoined);
       socket.off('player-left', handlePlayerLeft);
       socket.off('room-destroyed', handleRoomDestroyed);
+      socket.off('left-room', handleLeftRoom);
       socket.off('game-started', handleGameStarted);
       socket.off('guess-result', handleGuessResult);
       socket.off('player-progress', handlePlayerProgress);
@@ -434,6 +459,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       }
 
       socket.emit('reset-game', {
+        roomId: state.roomId,
+        playerId: state.currentPlayer.id
+      });
+    }, [socket, state.roomId, state.currentPlayer]),
+
+    leaveRoom: useCallback(() => {
+      if (!socket || !state.roomId || !state.currentPlayer) {
+        dispatch({ type: 'LEFT_ROOM' });
+        return;
+      }
+
+      socket.emit('leave-room', {
         roomId: state.roomId,
         playerId: state.currentPlayer.id
       });

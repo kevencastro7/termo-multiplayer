@@ -130,6 +130,47 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Leave room
+  socket.on('leave-room', (data: { roomId: string; playerId: string }) => {
+    try {
+      const room = RoomService.getRoom(data.roomId);
+      if (!room) {
+        connectedPlayers.delete(socket.id);
+        socket.emit('left-room');
+        return;
+      }
+
+      const leavingPlayer = room.players.find(p => p.id === data.playerId);
+      const result = RoomService.removePlayer(data.roomId, data.playerId);
+
+      socket.leave(data.roomId);
+      connectedPlayers.delete(socket.id);
+      socket.emit('left-room');
+
+      if (result.destroyed) {
+        if (result.reason === 'leader_left') {
+          io.to(data.roomId).emit('room-destroyed', {
+            reason: 'leader_left',
+            message: 'Sala fechada - líder saiu'
+          });
+        }
+        return;
+      }
+
+      if (result.room && leavingPlayer) {
+        io.to(data.roomId).emit('player-left', {
+          playerId: data.playerId,
+          playerName: leavingPlayer.name,
+          players: result.room.players.map(p => ({ id: p.id, name: p.name, isLeader: p.isLeader })),
+          playerCount: result.room.players.length,
+          newLeader: result.room.players.find(p => p.isLeader)?.name
+        });
+      }
+    } catch (error) {
+      socket.emit('error', { message: (error as Error).message });
+    }
+  });
+
   // Submit guess
   socket.on('submit-guess', async (data: { roomId: string; playerId: string; guess: string }) => {
     try {

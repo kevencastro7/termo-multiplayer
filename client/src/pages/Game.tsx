@@ -11,20 +11,37 @@ const Game: React.FC = () => {
   const { state, actions } = useGame();
   const { connect } = useSocket();
   const [playerName, setPlayerName] = useState('');
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode] = useState(() => {
+    const pathMatch = window.location.pathname.match(/^\/room\/([A-Z0-9]{1,6})$/i);
+    if (pathMatch?.[1]) {
+      return pathMatch[1].toUpperCase().slice(0, 6);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room')?.toUpperCase().slice(0, 6) || '';
+  });
   const [cursorPosition, setCursorPosition] = useState<number>(0);
 
-  // Auto-connect on mount
   useEffect(() => {
     connect();
   }, [connect]);
 
-  // Reset cursor to first tile when moving to a new guess
   useEffect(() => {
     if (state.gameStatus === 'playing') {
-      setCursorPosition(0); // Always select first tile on new guess
+      setCursorPosition(0);
     }
   }, [state.currentRow, state.gameStatus]);
+
+  useEffect(() => {
+    if (state.roomCode) {
+      window.history.replaceState({}, '', `/room/${encodeURIComponent(state.roomCode)}`);
+      return;
+    }
+
+    if (window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [state.roomCode]);
 
   const handleCreateRoom = (playerName: string, password?: string) => {
     actions.createRoom(playerName, password);
@@ -42,6 +59,33 @@ const Game: React.FC = () => {
     actions.resetGame();
   };
 
+  const handleLeaveRoom = () => {
+    actions.leaveRoom();
+  };
+
+  const handleShareRoom = async () => {
+    if (!state.roomCode) return;
+
+    const shareUrl = `${window.location.origin}/room/${encodeURIComponent(state.roomCode)}`;
+    const shareData = {
+      title: 'Termo Multiplayer',
+      text: `Entre na minha sala do Termo Multiplayer: ${state.roomCode}`,
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareUrl);
+      window.alert('Link da sala copiado para a área de transferência!');
+    } catch (error) {
+      console.error('Failed to share room:', error);
+    }
+  };
+
   const handleKeyPress = (key: string) => {
     if (key === 'ENTER') {
       if (state.currentGuess.length === 5) {
@@ -49,44 +93,33 @@ const Game: React.FC = () => {
       }
     } else if (key === 'BACKSPACE') {
       if (cursorPosition >= 0) {
-        // Pad the current guess to 5 characters to maintain positions
         const paddedGuess = state.currentGuess.padEnd(5, ' ');
-        
-        // Check if current position has a letter (not space)
         const currentChar = paddedGuess[cursorPosition];
         const hasLetterAtCurrent = currentChar !== ' ';
-        
+
         if (hasLetterAtCurrent) {
-          // Delete letter at current position and keep focus on same tile
           const newGuess = paddedGuess.slice(0, cursorPosition) + ' ' + paddedGuess.slice(cursorPosition + 1);
           actions.updateCurrentGuess(newGuess.trimRight());
-          // Keep cursor at same position
         } else if (cursorPosition > 0) {
-          // Current position is empty, delete previous letter and focus on that tile
           const newGuess = paddedGuess.slice(0, cursorPosition - 1) + ' ' + paddedGuess.slice(cursorPosition);
           actions.updateCurrentGuess(newGuess.trimRight());
           setCursorPosition(cursorPosition - 1);
         }
       }
     } else if (cursorPosition < 5 && key.match(/^[A-Z]$/)) {
-      // Insert character at cursor position - always allow typing at any position
-      // Pad the current guess to 5 characters to maintain positions
       const paddedGuess = state.currentGuess.padEnd(5, ' ');
       const newGuess = paddedGuess.slice(0, cursorPosition) + key + paddedGuess.slice(cursorPosition + 1);
       actions.updateCurrentGuess(newGuess.trimRight());
-      // Only move cursor if not at the last position
       if (cursorPosition < 4) {
         setCursorPosition(cursorPosition + 1);
       }
     }
   };
 
-  // Show connection screen if not connected
   if (!state.isConnected) {
     return <ConnectionScreen onRetry={connect} />;
   }
 
-  // Show room screen if not in a room
   if (!state.roomId) {
     return (
       <RoomScreen
@@ -110,6 +143,16 @@ const Game: React.FC = () => {
           {state.isLeader && <span className="leader-badge">Líder</span>}
         </div>
 
+        {state.gameStatus === 'waiting' && (
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button onClick={handleShareRoom} className="start-button" type="button">
+              Compartilhar Sala
+            </button>
+            <button onClick={handleLeaveRoom} className="reset-button" type="button">
+              Sair da Sala
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="game-content">
@@ -157,7 +200,6 @@ const Game: React.FC = () => {
           <div className="finished-screen">
             <h3>Jogo Finalizado!</h3>
 
-            {/* Rankings Display */}
             {state.rankings.length > 0 && (
               <div className="rankings-section">
                 <h4>Classificação Final</h4>
@@ -197,7 +239,6 @@ const Game: React.FC = () => {
         )}
       </div>
 
-      {/* Player List at Bottom */}
       <div className="players-list-bottom">
         {state.players.map(player => (
           <div key={player.id} className={`player-item ${player.isLeader ? 'leader' : ''}`}>
