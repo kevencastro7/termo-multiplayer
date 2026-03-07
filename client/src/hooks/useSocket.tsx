@@ -32,18 +32,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }).env?.VITE_SERVER_URL;
     if (envUrl) return envUrl;
 
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:3001';
-    }
-
-    return window.location.origin;
+    return undefined;
   };
 
   const connect = () => {
     if (socketRef.current?.connected) return;
 
     const serverUrl = getServerUrl();
-    socketRef.current = io(serverUrl, {
+    socketRef.current = serverUrl ? io(serverUrl, {
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+    }) : io({
       transports: ['websocket', 'polling'],
       upgrade: true,
     });

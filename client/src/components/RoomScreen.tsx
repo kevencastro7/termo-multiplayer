@@ -39,8 +39,7 @@ const RoomScreen: React.FC<RoomScreenProps> = ({
   useEffect(() => {
     const fetchRooms = async () => {
       try {
-        const apiUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001/api/rooms' : '/api/rooms';
-        const response = await fetch(apiUrl);
+        const response = await fetch('/api/rooms');
         if (response.ok) {
           const rooms = await response.json();
           setPublicRooms(rooms);
