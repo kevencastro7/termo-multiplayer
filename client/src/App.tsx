@@ -19,7 +19,6 @@ export function App() {
   const [connected, setConnected] = useState(socket.connected);
   const draftRef = useRef(draft);
   const nameRef = useRef(name);
-  const inputRef = useRef<HTMLInputElement>(null);
   draftRef.current = draft; nameRef.current = name;
 
   useEffect(() => {
@@ -148,7 +147,7 @@ export function App() {
         return <div className={`board-row ${activeRow ? 'active-row' : ''}`} key={row}>{Array.from({ length: 5 }, (_, col) => {
           const letter = letters[col] === ' ' ? '' : letters[col] ?? '';
           const status = guess?.result[col]; const isActive = activeRow && col === activeTile;
-          return <button type="button" aria-label={`Tentativa ${row + 1}, letra ${col + 1}${letter ? `: ${letter}` : ', vazia'}`} aria-pressed={!!isActive} className={`tile ${status ? `tile-${status}` : ''} ${letter && !status ? 'tile-filled' : ''} ${isActive ? 'tile-selected' : ''}`} key={col} onClick={() => { if (activeRow) { setActiveTile(col); inputRef.current?.focus(); } }}>{letter}</button>;
+          return <button type="button" aria-label={`Tentativa ${row + 1}, letra ${col + 1}${letter ? `: ${letter}` : ', vazia'}`} aria-pressed={!!isActive} className={`tile ${status ? `tile-${status}` : ''} ${letter && !status ? 'tile-filled' : ''} ${isActive ? 'tile-selected' : ''}`} key={col} onClick={() => { if (activeRow) setActiveTile(col); }}>{letter}</button>;
         })}</div>;
       })}</div>
       {canPlay ? <section className="keyboard" aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{ri === 2 && <button className="key key-action" onClick={submitGuess}>↵</button>}{[...row].map((letter) => <button key={letter} className={`key ${keyStatuses.has(letter) ? `key-${keyStatuses.get(letter)}` : ''}`} onClick={() => setLetter(letter)}>{letter}</button>)}{ri === 2 && <button className="key key-action key-delete" aria-label="Apagar" onClick={backspace}>⌫</button>}</div>)}</section> : <div className="board-spacer"/>}
@@ -158,7 +157,6 @@ export function App() {
       {finished && match.ranking && <div className="ranking"><p className="eyebrow">RESULTADO FINAL</p><h3>Placar da rodada</h3>{match.ranking.map((p, i) => <div className="rank-row" key={p.id}><strong>{String(i + 1).padStart(2, '0')}</strong><span>{p.name}</span><small>{p.status === 'won' ? `${p.guessesUsed} ${p.guessesUsed === 1 ? 'tentativa' : 'tentativas'} · ${((p.elapsedMs ?? 0) / 1000).toFixed(1)}s` : `Não resolveu · ${p.attempts}/6`}</small></div>)}</div>}
       {finished && <button className="primary-button play-again" onClick={returnToLobby}>Voltar ao lobby <span>↗</span></button>}
     </aside></div>
-    {!finished && <input ref={inputRef} className="screen-reader-input" aria-label="Digite sua tentativa" autoComplete="off" onChange={(e) => { const value = e.target.value; const added = value.slice(-1); if (added && /^[a-zA-ZÀ-ÖØ-öø-ÿ]$/u.test(added)) setLetter(added); e.target.value = ''; }} />}
     {notice && <div className="toast" role="status">{notice}</div>}
   </main>;
 }
