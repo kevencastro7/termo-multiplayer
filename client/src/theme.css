@@ -1,0 +1,82 @@
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #151a17;
+  --ink: #edf0e9;
+  --muted: #a0a89e;
+  --line: #303832;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] body { background: var(--paper); color: var(--ink); }
+:root[data-theme='dark'] .landing { background: radial-gradient(ellipse at 50% 45%, #202822 0, #151a17 68%); }
+:root[data-theme='dark'] .landing-card,
+:root[data-theme='dark'] .lobby-card,
+:root[data-theme='dark'] .players-panel { background: #1d241f; border-color: #303a32; box-shadow: 0 24px 70px #0003; }
+:root[data-theme='dark'] .brand-mark { background: #79a487; color: #142019; }
+:root[data-theme='dark'] .brand-dot,
+:root[data-theme='dark'] .landing h1 span { color: #9ac0a0; }
+:root[data-theme='dark'] .eyebrow,
+:root[data-theme='dark'] .field-label,
+:root[data-theme='dark'] .lobby-note,
+:root[data-theme='dark'] .board-caption,
+:root[data-theme='dark'] .landing-foot,
+:root[data-theme='dark'] .room-code small,
+:root[data-theme='dark'] .host-tag { color: #a4ada2; }
+:root[data-theme='dark'] .intro,
+:root[data-theme='dark'] .opponent-info > span,
+:root[data-theme='dark'] .rank-row small,
+:root[data-theme='dark'] .divider,
+:root[data-theme='dark'] .quiet-button { color: #b5bdb3; }
+:root[data-theme='dark'] .text-input { background: #151b17; color: #f1f3ee; border-color: #414b43; }
+:root[data-theme='dark'] .text-input::placeholder { color: #7f8a80; }
+:root[data-theme='dark'] .primary-button { background: #6c9877; color: #101a13; }
+:root[data-theme='dark'] .primary-button:hover { background: #83ad8c; }
+:root[data-theme='dark'] .secondary-button { background: #252d27; border-color: #48534a; color: #e1e8df; }
+:root[data-theme='dark'] .divider:before,
+:root[data-theme='dark'] .divider:after,
+:root[data-theme='dark'] .player-list,
+:root[data-theme='dark'] .player-row,
+:root[data-theme='dark'] .panel-heading,
+:root[data-theme='dark'] .opponent-row,
+:root[data-theme='dark'] .ranking,
+:root[data-theme='dark'] .rank-row { border-color: #343d36; }
+:root[data-theme='dark'] .room-code,
+:root[data-theme='dark'] .waiting-room-code { background: #202821; border-color: #536153; color: #aab4a9; }
+:root[data-theme='dark'] .room-code span,
+:root[data-theme='dark'] .waiting-room-code b { color: #dce8dc; }
+:root[data-theme='dark'] .avatar-0 { background: #2b4031; color: #add1ae; }
+:root[data-theme='dark'] .avatar-1 { background: #463a2b; color: #e3bd83; }
+:root[data-theme='dark'] .avatar-2 { background: #3c3549; color: #c7b3e2; }
+:root[data-theme='dark'] .avatar-3 { background: #493432; color: #e6aaa2; }
+:root[data-theme='dark'] .avatar-4 { background: #2d4144; color: #a7d0d4; }
+:root[data-theme='dark'] .timer { color: #d4ded3; }
+:root[data-theme='dark'] .match-heading { color: #a0a99f; }
+:root[data-theme='dark'] .match-heading b { color: #e0e8df; }
+:root[data-theme='dark'] .tile { background: #202821; color: #edf1e9; border-color: #465048; }
+:root[data-theme='dark'] .tile-filled { border-color: #829184; }
+:root[data-theme='dark'] .tile-correct { background: #4f8963; border-color: #4f8963; color: #fff; }
+:root[data-theme='dark'] .tile-present { background: #bd8e31; border-color: #bd8e31; color: #fff; }
+:root[data-theme='dark'] .tile-absent { background: #626b63; border-color: #626b63; color: #fff; }
+:root[data-theme='dark'] .key { background: #374139; color: #e6ebe4; box-shadow: 0 2px 0 #252c27; }
+:root[data-theme='dark'] .key-action { background: #435448; color: #e5f0e4; }
+:root[data-theme='dark'] .key-correct { background: #4f8963; color: #fff; }
+:root[data-theme='dark'] .key-present { background: #bd8e31; color: #fff; }
+:root[data-theme='dark'] .key-absent { background: #626b63; color: #fff; }
+:root[data-theme='dark'] .opponent-row.is-me { background: linear-gradient(90deg, #29362c, transparent); }
+:root[data-theme='dark'] .opponent-info b,
+:root[data-theme='dark'] .panel-heading h2,
+:root[data-theme='dark'] .ranking h3,
+:root[data-theme='dark'] .rank-row > span { color: #e6ece4; }
+:root[data-theme='dark'] .opponent-info b small { color: #aab4a9; }
+:root[data-theme='dark'] .attempt-count { color: #b3bdb2; }
+:root[data-theme='dark'] .landing-stamp { color: #8e9b90; }
+:root[data-theme='dark'] .landing-stamp span { color: #9ac0a0; }
+:root[data-theme='dark'] .theme-toggle { color: #e0e9df; border-color: #465148; background: #252e27; }
+
+.landing-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.topbar-actions { display: flex; align-items: center; gap: 15px; }
+.theme-toggle { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid #d9dbd2; border-radius: 6px; background: #fffefa; color: #4c554b; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.theme-toggle span:first-child { font-size: 16px; line-height: 1; }
+.theme-toggle:hover { border-color: #8fa391; }
+@media (max-width: 370px) { .topbar-actions { gap: 7px; } .theme-toggle { padding: 0 8px; } }

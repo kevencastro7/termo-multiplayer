@@ -8,6 +8,9 @@ const KEY_RANK: Record<TileStatus, number> = { absent: 1, present: 2, correct: 3
 
 export function App() {
   const socket = useMemo<GameSocket>(() => io({ autoConnect: true }), []);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
+    localStorage.getItem('termo-theme') === 'light' ? 'light' : 'dark',
+  );
   const [match, setMatch] = useState<MatchView | null>(null);
   const [name, setName] = useState(() => localStorage.getItem('termo-name') ?? '');
   const [roomCode, setRoomCode] = useState(() => new URLSearchParams(window.location.search).get('room')?.toUpperCase().slice(0, 5) ?? '');
@@ -20,6 +23,20 @@ export function App() {
   const draftRef = useRef(draft);
   const nameRef = useRef(name);
   draftRef.current = draft; nameRef.current = name;
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('termo-theme', theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#151a17' : '#f5f4ef');
+  }, [theme]);
+
+  const themeToggle = <button
+    type="button"
+    className="theme-toggle"
+    onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+    aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+    title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+  ><span aria-hidden="true">{theme === 'dark' ? '☼' : '☾'}</span><span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span></button>;
 
   useEffect(() => {
     const onState = (state: MatchView) => { setMatch(state); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice(''); };
@@ -118,7 +135,7 @@ export function App() {
   const finished = match?.phase === 'finished';
 
   if (!match) return <main className="landing"><div className="landing-card">
-    <div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span><span className={`connection-status ${connected ? 'is-connected' : ''}`}><i/>{connected ? 'CONECTADO' : 'CONECTANDO'}</span></div>
+    <div className="landing-brand-row"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span><span className={`connection-status ${connected ? 'is-connected' : ''}`}><i/>{connected ? 'CONECTADO' : 'CONECTANDO'}</span></div>{themeToggle}</div>
     <p className="eyebrow">PALAVRAS EM BOA COMPANHIA</p><h1>Uma palavra.<br/><span>Todo mundo junto.</span></h1>
     <p className="intro">Descubra a palavra secreta antes do tempo acabar. Seis tentativas, uma disputa entre amigos.</p>
     <label className="field-label" htmlFor="player-name">COMO PODEMOS TE CHAMAR?</label>
@@ -132,14 +149,14 @@ export function App() {
 
   if (match.phase === 'lobby') {
     const isHost = match.players.find((p) => p.id === match.me)?.isHost;
-    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><button className="quiet-button" onClick={leave}>Sair da sala</button></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><h2>Na sala <span>{match.players.length}</span></h2><div className="player-list">{match.players.map((p, i) => <div className="player-row" key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><span>{p.name}{p.id === match.me && <small> · você</small>}</span>{p.isHost && <span className="host-tag">ANFITRIÃO</span>}</div>)}</div>{isHost ? <button className="primary-button" onClick={() => socket.emit('match:start')}>Começar partida <span>↗</span></button> : <div className="waiting-note"><span className="live-dot"/> Aguardando o anfitrião…</div>}<p className="lobby-note">Até 12 jogadores · partidas de 5 minutos</p></section>{notice && <div className="toast">{notice}</div>}</main>;
+    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><h2>Na sala <span>{match.players.length}</span></h2><div className="player-list">{match.players.map((p, i) => <div className="player-row" key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><span>{p.name}{p.id === match.me && <small> · você</small>}</span>{p.isHost && <span className="host-tag">ANFITRIÃO</span>}</div>)}</div>{isHost ? <button className="primary-button" onClick={() => socket.emit('match:start')}>Começar partida <span>↗</span></button> : <div className="waiting-note"><span className="live-dot"/> Aguardando o anfitrião…</div>}<p className="lobby-note">Até 12 jogadores · partidas de 5 minutos</p></section>{notice && <div className="toast">{notice}</div>}</main>;
   }
 
   const me = match.players.find((p) => p.id === match.me);
   const waitingNextRound = match.phase === 'playing' && me?.status === 'waiting';
   const canPlay = !finished && !waitingNextRound && me?.status === 'playing';
-  if (waitingNextRound) return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><button className="quiet-button" onClick={leave}>Sair da sala</button></header><section className="lobby-card waiting-card"><div className="lobby-icon">◷</div><p className="eyebrow">RODADA EM ANDAMENTO</p><h1>Você chegou!</h1><p className="intro">Aguarde esta rodada terminar. Você entrará na sala e poderá jogar na próxima.</p><div className="waiting-room-code">SALA <b>{match.code}</b></div><div className="waiting-note"><span className="live-dot"/> Próxima rodada em breve</div></section>{notice && <div className="toast">{notice}</div>}</main>;
-  return <main className="game-page"><header className="topbar game-topbar"><button className="brand brand-button" onClick={leave}><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></button><div className={`timer ${remaining <= 30 ? 'timer-urgent' : ''}`}><span>◷</span>{formattedTime}</div><button className="quiet-button share-button" onClick={copyInvite}>{copied ? 'Copiado ✓' : 'Convidar ↗'}</button></header>
+  if (waitingNextRound) return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card waiting-card"><div className="lobby-icon">◷</div><p className="eyebrow">RODADA EM ANDAMENTO</p><h1>Você chegou!</h1><p className="intro">Aguarde esta rodada terminar. Você entrará na sala e poderá jogar na próxima.</p><div className="waiting-room-code">SALA <b>{match.code}</b></div><div className="waiting-note"><span className="live-dot"/> Próxima rodada em breve</div></section>{notice && <div className="toast">{notice}</div>}</main>;
+  return <main className="game-page"><header className="topbar game-topbar"><button className="brand brand-button" onClick={leave}><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></button><div className={`timer ${remaining <= 30 ? 'timer-urgent' : ''}`}><span>◷</span>{formattedTime}</div><div className="topbar-actions">{themeToggle}<button className="quiet-button share-button" onClick={copyInvite}>{copied ? 'Copiado ✓' : 'Convidar ↗'}</button></div></header>
     <div className="game-layout"><section className="board-column"><div className="match-heading"><span className="live-dot"/> SALA <b>{match.code}</b><span className="heading-sep">·</span> <span>{match.players.length} jogadores</span></div>
       <div className="board" role="group" aria-label="Tabuleiro de seis tentativas">{Array.from({ length: 6 }, (_, row) => {
         const guess = match.guesses[row]; const activeRow = !guess && canPlay && row === match.guesses.length;
