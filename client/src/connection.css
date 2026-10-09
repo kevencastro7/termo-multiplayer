@@ -1,0 +1,1 @@
+.connection-status{margin-left:10px;display:flex;align-items:center;gap:6px;font:9px 'DM Mono',monospace;letter-spacing:.08em;color:#aa705d}.connection-status i{width:6px;height:6px;border-radius:50%;background:#c7795f}.connection-status.is-connected{color:#708672}.connection-status.is-connected i{background:#6ea97b}
