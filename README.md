@@ -26,6 +26,18 @@ npm start
 
 The production server serves the Socket.IO backend and listens on `PORT` (default 3001). Serve the `dist/` static client from the same origin in production to enable same-origin PWA installation and socket connections. The app manifest and service worker are in `public/`.
 
+## Deploy to Railway
+
+This repository is configured as a **single Railway web service**: Railway builds the Vite client and TypeScript server, then starts Express, which serves the client and Socket.IO from the same domain. The `/health` endpoint is configured for Railway's deployment health check. Keep the repository root as the service root so both `filtered-portuguese-words.txt` and `railway.json` are included.
+
+1. Push this repository to GitHub.
+2. In Railway, create a project and choose **Deploy from GitHub repo**, then select this repository.
+3. Leave the service root directory set to `/`. Railway reads `railway.json` and runs `npm run build` followed by `npm start`.
+4. After the first deployment is healthy, open the service's **Settings → Networking** and generate a public domain.
+5. Open the generated HTTPS domain. The same origin serves the web app and real-time Socket.IO connection; no separate `CLIENT_URL` or manually configured port is needed.
+
+Railway provides the `PORT` variable automatically; the server listens on it. Rooms are held in memory, so active matches are cleared when a deployment restarts. Run one replica unless you later add shared room storage and a Socket.IO adapter for horizontal scaling.
+
 ## Rules
 
 - One secret word is selected from the first 2,000 dictionary entries when a room is created.
