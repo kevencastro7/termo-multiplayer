@@ -10,7 +10,6 @@ const WORDS_FILE_PATH = path.join(__dirname, '../../filtered-portuguese-words.tx
 export class WordService {
   private static allWords: string[] | null = null; // All words for validation
   private static targetWords: string[] | null = null; // First 2000 words for target selection
-  private static validGuesses: Set<string> | null = null;
   private static normalizedMap: Map<string, string> | null = null;
   private static initialized = false;
 
@@ -29,7 +28,6 @@ export class WordService {
 
       this.allWords = words;
       this.targetWords = words.slice(0, 2000); // First 2000 words for target selection
-      this.validGuesses = new Set(words);
       console.log(`✅ Loaded ${words.length} Portuguese words from file`);
       console.log(`✅ Using first ${this.targetWords.length} words for target selection`);
     } catch (error) {
@@ -37,7 +35,6 @@ export class WordService {
       // Fallback to empty arrays
       this.allWords = [];
       this.targetWords = [];
-      this.validGuesses = new Set();
     }
   }
 
