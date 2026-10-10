@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { ClientToServerEvents, MatchView, ServerToClientEvents, TileStatus } from '../../shared/types';
+import type { ClientToServerEvents, MatchView, RoomSummary, ServerToClientEvents, TileStatus } from '../../shared/types';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const LETTER_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
@@ -35,6 +35,7 @@ export function App() {
   const [remaining, setRemaining] = useState(300);
   const [copied, setCopied] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [resuming, setResuming] = useState(Boolean(readRoomSession()));
   const sessionRef = useRef<RoomSession | null>(readRoomSession());
   const resumeInFlight = useRef(false);
@@ -58,6 +59,7 @@ export function App() {
 
   useEffect(() => {
     const onState = (state: MatchView) => { setMatch(state); setResuming(false); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice(''); };
+    const onRoomsState = (availableRooms: RoomSummary[]) => setRooms(availableRooms);
     const onError = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 2800); };
     const resumeRoom = () => {
       const session = sessionRef.current;
@@ -96,14 +98,16 @@ export function App() {
       else if (reason === 'io server disconnect') setNotice('Conexão encerrada pelo servidor.');
     };
     const onConnectError = () => { setConnected(false); };
-    socket.on('match:state', onState); socket.on('match:error', onError); socket.on('match:notice', onError);
+    const requestRooms = () => { if (socket.connected) socket.emit('rooms:list', setRooms); };
+    socket.on('match:state', onState); socket.on('match:error', onError); socket.on('match:notice', onError); socket.on('rooms:state', onRoomsState);
+    socket.on('connect', requestRooms);
     const onVisibility = () => { if (document.visibilityState === 'visible' && !socket.connected) socket.connect(); else if (document.visibilityState === 'visible') resumeRoom(); };
     socket.on('connect', onConnect); socket.on('disconnect', onDisconnect); socket.on('connect_error', onConnectError);
     document.addEventListener('visibilitychange', onVisibility);
     setConnected(socket.connected);
-    if (socket.connected) resumeRoom();
+    if (socket.connected) { resumeRoom(); requestRooms(); }
     else socket.connect();
-    return () => { document.removeEventListener('visibilitychange', onVisibility); socket.off('match:state', onState); socket.off('match:error', onError); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
+    return () => { document.removeEventListener('visibilitychange', onVisibility); socket.off('rooms:state', onRoomsState); socket.off('connect', requestRooms); socket.off('match:state', onState); socket.off('match:error', onError); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
   }, [socket]);
 
   useEffect(() => {
@@ -241,15 +245,25 @@ export function App() {
   const finished = match?.phase === 'finished';
 
   if (!match && resuming) return <main className="landing"><div className="landing-card"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><p className="intro">Reconectando à sua sala…</p>{notice && <div className="toast" role="status">{notice}</div>}</div></main>;
-  if (!match) return <main className="landing"><div className="landing-card">
+  if (!match) return <main className="landing"><div className="landing-card landing-card-home">
     <div className="landing-brand-row"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span><span className={`connection-status ${connected ? 'is-connected' : ''}`}><i/>{connected ? 'CONECTADO' : 'CONECTANDO'}</span></div>{themeToggle}</div>
     <p className="eyebrow">PALAVRAS EM BOA COMPANHIA</p><h1>Uma palavra.<br/><span>Todo mundo junto.</span></h1>
     <p className="intro">Descubra a palavra secreta antes do tempo acabar. Seis tentativas, uma disputa entre amigos.</p>
     <label className="field-label" htmlFor="player-name">COMO PODEMOS TE CHAMAR?</label>
     <input id="player-name" className="text-input" maxLength={18} placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
-    <button className="primary-button" onClick={createRoom}>Criar uma sala <span>↗</span></button>
+    <button className="primary-button landing-create-button" onClick={createRoom}>Criar sala <span>↗</span></button>
     <div className="divider"><span>ou entre com um código</span></div>
     <div className="join-row"><input className="text-input code-input" aria-label="Código da sala" maxLength={5} placeholder="CÓDIGO" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} onKeyDown={(e) => { if (e.key === 'Enter') joinRoom(); }} /><button className="secondary-button" onClick={joinRoom} disabled={roomCode.length !== 5}>Entrar</button></div>
+    <section className="available-rooms" aria-label="Salas disponíveis">
+      <div className="available-rooms-heading"><h2>Salas abertas</h2><span>{rooms.length}</span></div>
+      {rooms.length === 0 ? <p className="rooms-empty">Nenhuma sala por aqui ainda. Crie a primeira!</p> : <div className="available-room-list">{rooms.map((room) => {
+        const full = room.playerCount >= room.capacity;
+        const status = room.phase === 'lobby' ? 'No lobby' : room.phase === 'playing' ? 'Em partida' : 'Rodada encerrada';
+        return <button type="button" className="available-room" key={room.code} onClick={() => { setRoomCode(room.code); if (socket.connected) socket.timeout(5000).emit('room:join', { code: room.code, name: persistName() }, (timeoutError, result) => { if (timeoutError) setNotice('O servidor não respondeu. Tente novamente.'); else if (result.error) setNotice(result.error); else if (result.playerId && result.resumeToken) { const session = { code: room.code, playerId: result.playerId, resumeToken: result.resumeToken }; sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } }); else socket.connect(); }}>
+          <span className="available-room-code">{room.code}</span><span className="available-room-meta"><span>{status}</span><span>{room.playerCount}/{room.capacity} jogadores</span></span><span className="available-room-action">{full ? 'Cheia' : 'Entrar ↗'}</span>
+        </button>;
+      })}</div>}
+    </section>
     <p className="landing-foot"><span>◷</span> 5 minutos <i/> <span>⌁</span> Até 6 tentativas</p>
     {notice && <div className="toast" role="status">{notice}</div>}
   </div><div className="landing-stamp">FEITO PARA<br/>JOGAR JUNTO <span>✳</span></div></main>;

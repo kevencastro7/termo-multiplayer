@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Server, Socket } from 'socket.io';
-import type { ClientToServerEvents, MatchView, PublicPlayer, ServerToClientEvents, TileStatus } from '../shared/types';
+import type { ClientToServerEvents, MatchView, PublicPlayer, RoomSummary, ServerToClientEvents, TileStatus } from '../shared/types';
 import { WordService } from './wordService';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -27,6 +27,10 @@ interface Room { code: string; hostId: string; solution: string; players: Map<st
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
+function roomSummaries(): RoomSummary[] {
+  return [...rooms.values()].map((room) => ({ code: room.code, playerCount: room.players.size, capacity: 12, phase: room.phase }));
+}
+function broadcastRooms(): void { io.emit('rooms:state', roomSummaries()); }
 
 function code(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -65,6 +69,7 @@ function finish(room: Room): void {
   if (room.timer) clearTimeout(room.timer);
   for (const player of room.players.values()) if (player.status === 'playing') player.status = 'lost';
   broadcast(room);
+  broadcastRooms();
 }
 function removePlayerById(roomCode: string, playerId: string): void {
   const room = rooms.get(roomCode);
@@ -82,6 +87,7 @@ function removePlayerById(roomCode: string, playerId: string): void {
     if (room.timer) clearTimeout(room.timer);
     rooms.delete(roomCode);
   } else broadcast(room);
+  broadcastRooms();
 }
 function removePlayer(socket: Socket<ClientToServerEvents, ServerToClientEvents>): void {
   const roomCode = socketRoom.get(socket.id);
@@ -94,9 +100,11 @@ function removePlayer(socket: Socket<ClientToServerEvents, ServerToClientEvents>
   player.socketId = null;
   player.disconnectTimer = setTimeout(() => removePlayerById(roomCode, player.id), RECONNECT_GRACE_MS);
   broadcast(room);
+  broadcastRooms();
 }
 
 io.on('connection', (socket) => {
+  socket.on('rooms:list', (callback) => callback(roomSummaries()));
   socket.on('room:create', ({ name }, callback) => {
     const previousCode = socketRoom.get(socket.id);
     const previousRoom = previousCode && rooms.get(previousCode);
@@ -109,7 +117,7 @@ io.on('connection', (socket) => {
     const room: Room = { code: roomCode, hostId: playerId, solution: '', players: new Map(), phase: 'lobby', endsAt: null };
     const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: 'playing' };
     room.players.set(player.id, player); rooms.set(roomCode, room); socketRoom.set(socket.id, roomCode); socket.join(roomCode);
-    callback({ code: roomCode, playerId, resumeToken }); broadcast(room);
+    callback({ code: roomCode, playerId, resumeToken }); broadcast(room); broadcastRooms();
   });
   socket.on('room:join', ({ code: requestedCode, name }, callback) => {
     const room = rooms.get(requestedCode.trim().toUpperCase());
@@ -124,7 +132,7 @@ io.on('connection', (socket) => {
     const resumeToken = randomBytes(32).toString('base64url');
     const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: joinedDuringRound ? 'waiting' : 'playing' };
     room.players.set(player.id, player); socketRoom.set(socket.id, room.code); socket.join(room.code);
-    callback({ playerId, resumeToken }); broadcast(room);
+    callback({ playerId, resumeToken }); broadcast(room); broadcastRooms();
   });
   socket.on('room:resume', ({ playerId, resumeToken }, callback) => {
     const room = [...rooms.values()].find((candidate) => candidate.players.has(playerId));
@@ -147,6 +155,7 @@ io.on('connection', (socket) => {
     callback({ state: restoredState });
     socket.emit('match:state', restoredState);
     broadcast(room);
+    broadcastRooms();
   });
   socket.on('match:start', () => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
@@ -161,6 +170,7 @@ io.on('connection', (socket) => {
     room.phase = 'playing'; room.endsAt = Date.now() + MATCH_MS;
     room.timer = setTimeout(() => finish(room), MATCH_MS);
     broadcast(room);
+    broadcastRooms();
   });
   socket.on('guess:submit', ({ word }) => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
@@ -188,6 +198,7 @@ io.on('connection', (socket) => {
       participant.status = 'playing'; participant.attempts = 0; participant.guesses = []; participant.elapsedMs = undefined;
     }
     broadcast(room);
+    broadcastRooms();
   });
   socket.on('room:leave', () => {
     const roomCode = socketRoom.get(socket.id);
