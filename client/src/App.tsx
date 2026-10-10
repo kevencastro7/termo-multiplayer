@@ -5,6 +5,15 @@ import type { ClientToServerEvents, MatchView, ServerToClientEvents, TileStatus 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const LETTER_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
 const KEY_RANK: Record<TileStatus, number> = { absent: 1, present: 2, correct: 3 };
+const SESSION_KEY = 'termo-room-session';
+interface RoomSession { playerId: string; resumeToken: string; code: string }
+
+function readRoomSession(): RoomSession | null {
+  try {
+    const value = sessionStorage.getItem(SESSION_KEY);
+    return value ? JSON.parse(value) as RoomSession : null;
+  } catch { return null; }
+}
 
 export function App() {
   const socket = useMemo<GameSocket>(() => io({ autoConnect: true }), []);
@@ -20,6 +29,9 @@ export function App() {
   const [remaining, setRemaining] = useState(300);
   const [copied, setCopied] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
+  const [resuming, setResuming] = useState(Boolean(readRoomSession()));
+  const sessionRef = useRef<RoomSession | null>(readRoomSession());
+  const resumeInFlight = useRef(false);
   const draftRef = useRef(draft);
   const nameRef = useRef(name);
   draftRef.current = draft; nameRef.current = name;
@@ -39,18 +51,39 @@ export function App() {
   ><span aria-hidden="true">{theme === 'dark' ? '☼' : '☾'}</span><span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span></button>;
 
   useEffect(() => {
-    const onState = (state: MatchView) => { setMatch(state); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice(''); };
+    const onState = (state: MatchView) => { setMatch(state); setResuming(false); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice(''); };
     const onError = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 2800); };
-    const onConnect = () => { setConnected(true); setNotice(''); };
+    const resumeRoom = () => {
+      const session = sessionRef.current;
+      if (!session || !socket.connected || resumeInFlight.current) return;
+      resumeInFlight.current = true;
+      setResuming(true);
+      socket.timeout(5000).emit('room:resume', { playerId: session.playerId, resumeToken: session.resumeToken }, (timeoutError, result) => {
+        resumeInFlight.current = false;
+        if (timeoutError) { setNotice('Reconectando à sala…'); return; }
+        if (result.error) {
+          sessionRef.current = null;
+          sessionStorage.removeItem(SESSION_KEY);
+          setMatch(null);
+          setRoomCode(session.code);
+          setResuming(false);
+          setNotice(result.error);
+        }
+      });
+    };
+    const onConnect = () => { setConnected(true); if (sessionRef.current) resumeRoom(); else setNotice(''); };
     const onDisconnect = (reason: string) => {
       setConnected(false);
-      if (reason === 'io server disconnect') setNotice('Conexão encerrada pelo servidor. Recarregue a página.');
+      if (sessionRef.current) setNotice('Conexão perdida. Tentando voltar à sala…');
+      else if (reason === 'io server disconnect') setNotice('Conexão encerrada pelo servidor.');
     };
     const onConnectError = () => { setConnected(false); };
     socket.on('match:state', onState); socket.on('match:error', onError); socket.on('match:notice', onError);
+    const onVisibility = () => { if (document.visibilityState === 'visible' && !socket.connected) socket.connect(); else if (document.visibilityState === 'visible') resumeRoom(); };
     socket.on('connect', onConnect); socket.on('disconnect', onDisconnect); socket.on('connect_error', onConnectError);
+    document.addEventListener('visibilitychange', onVisibility);
     setConnected(socket.connected);
-    return () => { socket.off('match:state', onState); socket.off('match:error', onError); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
+    return () => { document.removeEventListener('visibilitychange', onVisibility); socket.off('match:state', onState); socket.off('match:error', onError); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
   }, [socket]);
 
   useEffect(() => {
@@ -102,7 +135,10 @@ export function App() {
     socket.timeout(5000).emit('room:create', { name: persistName() }, (timeoutError, result) => {
       if (timeoutError) setNotice('O servidor não respondeu. Confira se npm run dev está rodando.');
       else if (result.error) setNotice(result.error);
-      else if (result.code) setRoomCode(result.code);
+    else if (result.code && result.playerId && result.resumeToken) {
+      const session = { code: result.code, playerId: result.playerId, resumeToken: result.resumeToken };
+      sessionRef.current = session; sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); setRoomCode(result.code);
+    }
     });
   };
   const joinRoom = () => {
@@ -110,6 +146,10 @@ export function App() {
     socket.timeout(5000).emit('room:join', { code: roomCode, name: persistName() }, (timeoutError, result) => {
       if (timeoutError) setNotice('O servidor não respondeu. Tente novamente.');
       else if (result.error) setNotice(result.error);
+      else if (result.playerId && result.resumeToken) {
+        const session = { code: roomCode, playerId: result.playerId, resumeToken: result.resumeToken };
+        sessionRef.current = session; sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      }
     });
   };
 
@@ -150,7 +190,7 @@ export function App() {
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [backspace, match, setLetter, submitGuess]);
 
-  const leave = () => { socket.emit('room:leave'); setMatch(null); setDraft(''); setRoomCode(''); window.history.replaceState(null, '', '/'); };
+  const leave = () => { socket.emit('room:leave'); sessionRef.current = null; sessionStorage.removeItem(SESSION_KEY); setResuming(false); setMatch(null); setDraft(''); setRoomCode(''); window.history.replaceState(null, '', '/'); };
   const returnToLobby = () => { setDraft(''); setActiveTile(0); socket.emit('room:return-lobby'); };
   const copyInvite = async () => {
     if (!match) return;
@@ -171,6 +211,7 @@ export function App() {
   const formattedTime = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
   const finished = match?.phase === 'finished';
 
+  if (!match && resuming) return <main className="landing"><div className="landing-card"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><p className="intro">Reconectando à sua sala…</p>{notice && <div className="toast" role="status">{notice}</div>}</div></main>;
   if (!match) return <main className="landing"><div className="landing-card">
     <div className="landing-brand-row"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span><span className={`connection-status ${connected ? 'is-connected' : ''}`}><i/>{connected ? 'CONECTADO' : 'CONECTANDO'}</span></div>{themeToggle}</div>
     <p className="eyebrow">PALAVRAS EM BOA COMPANHIA</p><h1>Uma palavra.<br/><span>Todo mundo junto.</span></h1>
