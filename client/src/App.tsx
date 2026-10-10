@@ -167,11 +167,16 @@ export function App() {
   const backspace = useCallback(() => {
     if (!match || match.phase !== 'playing') return;
     const next = [...draftRef.current.padEnd(5, ' ')];
-    let index = Math.min(activeTile, 4);
-    if (next[index] === ' ') index--;
+    const selected = Math.min(activeTile, 4);
+    let index = selected;
     while (index >= 0 && next[index] === ' ') index--;
-    if (index < 0) return;
-    next[index] = ' '; const value = next.join('').trimEnd(); setDraft(value); draftRef.current = value; setActiveTile(index);
+    if (index < 0) {
+      setActiveTile(Math.max(0, selected - 1));
+      return;
+    }
+    next[index] = ' ';
+    const value = next.join('').trimEnd();
+    setDraft(value); draftRef.current = value; setActiveTile(index);
   }, [activeTile, match]);
 
   const submitGuess = useCallback(() => {
@@ -179,6 +184,10 @@ export function App() {
     if ([...draftRef.current].length !== 5) { setNotice('Preencha as cinco letras.'); return; }
     socket.emit('guess:submit', { word: draftRef.current }); setDraft(''); draftRef.current = ''; setActiveTile(0);
   }, [match, socket]);
+
+  const vibrateForVirtualKey = () => {
+    if ('vibrate' in navigator) navigator.vibrate(10);
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -245,7 +254,7 @@ export function App() {
           return <button type="button" aria-label={`Tentativa ${row + 1}, letra ${col + 1}${letter ? `: ${letter}` : ', vazia'}`} aria-pressed={!!isActive} className={`tile ${status ? `tile-${status}` : ''} ${letter && !status ? 'tile-filled' : ''} ${isActive ? 'tile-selected' : ''}`} key={col} onClick={() => { if (activeRow) setActiveTile(col); }}>{letter}</button>;
         })}</div>;
       })}</div>
-      {canPlay ? <section className="keyboard" aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => <button key={letter} className={`key ${keyStatuses.has(letter) ? `key-${keyStatuses.get(letter)}` : ''}`} onClick={() => setLetter(letter)}>{letter}</button>)}{ri === 1 && <button className="key key-action key-delete" aria-label="Apagar" onClick={backspace}>⌫</button>}{ri === 2 && <button className="key key-action" onClick={submitGuess}>↵</button>}</div>)}</section> : <div className="board-spacer"/>}
+      {canPlay ? <section className="keyboard" aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => <button key={letter} className={`key ${keyStatuses.has(letter) ? `key-${keyStatuses.get(letter)}` : ''}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>)}{ri === 1 && <button className="key key-action key-delete" aria-label="Apagar" onClick={() => { vibrateForVirtualKey(); backspace(); }}>⌫</button>}{ri === 2 && <button className="key key-action" onClick={() => { vibrateForVirtualKey(); submitGuess(); }}>↵</button>}</div>)}</section> : <div className="board-spacer"/>}
       <div className="board-caption">{finished ? `A palavra era ${match.solution}` : canPlay ? 'TOQUE EM UMA CASA PARA ESCOLHER ONDE DIGITAR' : 'SUA PARTIDA FOI CONCLUÍDA'}</div>
     </section><aside className="players-panel"><div className="panel-heading"><div><p className="eyebrow">AO VIVO</p><h2>Na disputa <span>{match.players.length}</span></h2></div><span className="signal">●</span></div>
       <div className="opponent-list">{match.players.map((p, i) => <div className={`opponent-row ${p.id === match.me ? 'is-me' : ''}`} key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><div className="opponent-info"><b>{p.name}{p.id === match.me && <small> (você)</small>}</b><span>{p.status === 'won' ? 'Palavra descoberta!' : p.status === 'lost' ? 'Tentativas encerradas' : p.attempts === 0 ? 'Pensando...' : `${p.attempts} de 6 tentativas`}</span></div><div className={`attempt-count ${p.status === 'won' ? 'count-won' : ''}`}>{p.status === 'won' ? '✓' : `${p.attempts}/6`}</div></div>)}</div>
