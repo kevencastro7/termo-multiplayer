@@ -143,8 +143,9 @@ io.on('connection', (socket) => {
     player.socketId = socket.id;
     socketRoom.set(socket.id, room.code);
     socket.join(room.code);
-    callback({});
-    socket.emit('match:state', state(room, player.id));
+    const restoredState = state(room, player.id);
+    callback({ state: restoredState });
+    socket.emit('match:state', restoredState);
     broadcast(room);
   });
   socket.on('match:start', () => {

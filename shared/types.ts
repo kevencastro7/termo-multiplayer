@@ -18,7 +18,7 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   'room:create': (payload: { name: string }, callback: (result: { code?: string; playerId?: string; resumeToken?: string; error?: string }) => void) => void;
   'room:join': (payload: { code: string; name: string }, callback: (result: { playerId?: string; resumeToken?: string; error?: string }) => void) => void;
-  'room:resume': (payload: { playerId: string; resumeToken: string }, callback: (result: { error?: string }) => void) => void;
+  'room:resume': (payload: { playerId: string; resumeToken: string }, callback: (result: { state?: MatchView; error?: string }) => void) => void;
   'match:start': () => void;
   'room:return-lobby': () => void;
   'guess:submit': (payload: { word: string }) => void;

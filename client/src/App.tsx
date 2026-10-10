@@ -10,13 +10,19 @@ interface RoomSession { playerId: string; resumeToken: string; code: string }
 
 function readRoomSession(): RoomSession | null {
   try {
-    const value = sessionStorage.getItem(SESSION_KEY);
-    return value ? JSON.parse(value) as RoomSession : null;
+    const saved = localStorage.getItem(SESSION_KEY);
+    const legacy = saved ? null : sessionStorage.getItem(SESSION_KEY);
+    const value = saved ?? legacy;
+    if (!value) return null;
+    const session = JSON.parse(value) as RoomSession;
+    if (!session.playerId || !session.resumeToken || !session.code) return null;
+    if (legacy) localStorage.setItem(SESSION_KEY, legacy);
+    return session;
   } catch { return null; }
 }
 
 export function App() {
-  const socket = useMemo<GameSocket>(() => io({ autoConnect: true }), []);
+  const socket = useMemo<GameSocket>(() => io({ autoConnect: false }), []);
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     localStorage.getItem('termo-theme') === 'light' ? 'light' : 'dark',
   );
@@ -60,14 +66,26 @@ export function App() {
       setResuming(true);
       socket.timeout(5000).emit('room:resume', { playerId: session.playerId, resumeToken: session.resumeToken }, (timeoutError, result) => {
         resumeInFlight.current = false;
-        if (timeoutError) { setNotice('Reconectando à sala…'); return; }
+        if (timeoutError) {
+          setNotice('Reconectando à sala…');
+          if (socket.connected) window.setTimeout(resumeRoom, 1000);
+          return;
+        }
         if (result.error) {
           sessionRef.current = null;
+          localStorage.removeItem(SESSION_KEY);
           sessionStorage.removeItem(SESSION_KEY);
           setMatch(null);
           setRoomCode(session.code);
           setResuming(false);
           setNotice(result.error);
+          return;
+        }
+        if (result.state) {
+          setMatch(result.state);
+          setRemaining(Math.ceil(result.state.remainingMs / 1000));
+          setResuming(false);
+          setNotice('');
         }
       });
     };
@@ -83,6 +101,8 @@ export function App() {
     socket.on('connect', onConnect); socket.on('disconnect', onDisconnect); socket.on('connect_error', onConnectError);
     document.addEventListener('visibilitychange', onVisibility);
     setConnected(socket.connected);
+    if (socket.connected) resumeRoom();
+    else socket.connect();
     return () => { document.removeEventListener('visibilitychange', onVisibility); socket.off('match:state', onState); socket.off('match:error', onError); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
   }, [socket]);
 
@@ -137,7 +157,7 @@ export function App() {
       else if (result.error) setNotice(result.error);
     else if (result.code && result.playerId && result.resumeToken) {
       const session = { code: result.code, playerId: result.playerId, resumeToken: result.resumeToken };
-      sessionRef.current = session; sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); setRoomCode(result.code);
+      sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session)); setRoomCode(result.code);
     }
     });
   };
@@ -148,7 +168,7 @@ export function App() {
       else if (result.error) setNotice(result.error);
       else if (result.playerId && result.resumeToken) {
         const session = { code: roomCode, playerId: result.playerId, resumeToken: result.resumeToken };
-        sessionRef.current = session; sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       }
     });
   };
@@ -199,7 +219,7 @@ export function App() {
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [backspace, match, setLetter, submitGuess]);
 
-  const leave = () => { socket.emit('room:leave'); sessionRef.current = null; sessionStorage.removeItem(SESSION_KEY); setResuming(false); setMatch(null); setDraft(''); setRoomCode(''); window.history.replaceState(null, '', '/'); };
+  const leave = () => { socket.emit('room:leave'); sessionRef.current = null; localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); setResuming(false); setMatch(null); setDraft(''); setRoomCode(''); window.history.replaceState(null, '', '/'); };
   const returnToLobby = () => { setDraft(''); setActiveTile(0); socket.emit('room:return-lobby'); };
   const copyInvite = async () => {
     if (!match) return;
