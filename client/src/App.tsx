@@ -59,6 +59,43 @@ export function App() {
     update(); const id = window.setInterval(update, 250); return () => window.clearInterval(id);
   }, [match?.phase, match?.endsAt]);
 
+  useEffect(() => {
+    if (!match) return;
+
+    let active = true;
+    let wakeLock: WakeLockSentinel | null = null;
+
+    const requestWakeLock = async () => {
+      if (!active || document.visibilityState !== 'visible' || wakeLock) return;
+      try {
+        const lock = await navigator.wakeLock?.request('screen');
+        if (!lock) return;
+        if (!active) {
+          await lock.release();
+          return;
+        }
+        wakeLock = lock;
+        lock.addEventListener('release', () => { wakeLock = null; }, { once: true });
+      } catch {
+        // Wake Lock is optional and may be denied by the browser or device.
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void requestWakeLock();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    void requestWakeLock();
+
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (wakeLock && !wakeLock.released) void wakeLock.release();
+      wakeLock = null;
+    };
+  }, [match !== null]);
+
   const persistName = () => { const value = name.trim() || 'Jogador'; setName(value); localStorage.setItem('termo-name', value); return value; };
   const createRoom = () => {
     if (!socket.connected) { setNotice('Conectando ao servidor… tente novamente em alguns segundos.'); socket.connect(); return; }
