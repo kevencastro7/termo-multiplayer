@@ -30,6 +30,10 @@ export class WordService {
     this.load();
     return !!this.normalizedMap?.has(this.normalizeWord(word));
   }
+  static getCanonicalWord(word: string): string | undefined {
+    this.load();
+    return this.normalizedMap?.get(this.normalizeWord(word));
+  }
   static getRandomWord(): string {
     this.load();
     const words = this.targetWords!;

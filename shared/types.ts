@@ -1,5 +1,5 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
-export interface GuessView { word: string; result: TileStatus[] }
+export interface GuessView { word: string; result: TileStatus[]; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
   isHost: boolean;

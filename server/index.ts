@@ -21,7 +21,7 @@ if (fs.existsSync(path.join(clientDist, 'index.html'))) {
 const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { cors: { origin: true } });
 
-interface Guess { word: string; result: TileStatus[] }
+interface Guess { word: string; result: TileStatus[]; revealedWord: string }
 interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; elapsedMs?: number }
 interface Room { code: string; hostId: string; solution: string; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; endsAt: number | null; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
@@ -171,7 +171,7 @@ io.on('connection', (socket) => {
     if (!WordService.isValidFormat(guess)) return socket.emit('match:error', 'A palavra precisa ter 5 letras.');
     if (!WordService.isValidGuess(guess)) return socket.emit('match:error', 'Essa palavra não está no nosso dicionário.');
     const result = WordService.score(guess, room.solution);
-    player.guesses.push({ word: guess, result }); player.attempts++;
+    player.guesses.push({ word: guess, result, revealedWord: WordService.getCanonicalWord(guess) ?? guess }); player.attempts++;
     if (result.every((tile) => tile === 'correct')) {
       player.status = 'won'; player.elapsedMs = Date.now() - (room.endsAt! - MATCH_MS);
     } else if (player.attempts >= 6) player.status = 'lost';

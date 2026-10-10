@@ -267,7 +267,8 @@ export function App() {
     <div className="game-layout"><section className="board-column"><div className="match-heading"><span className="live-dot"/> SALA <b>{match.code}</b><span className="heading-sep">·</span> <span>{match.players.length} jogadores</span></div>
       <div className="board" role="group" aria-label="Tabuleiro de seis tentativas">{Array.from({ length: 6 }, (_, row) => {
         const guess = match.guesses[row]; const activeRow = !guess && canPlay && row === match.guesses.length;
-        const letters = guess ? [...guess.word] : activeRow ? [...draft.padEnd(5, ' ')] : [];
+        const revealedGuess = guess?.revealedWord ?? guess?.word;
+        const letters = guess ? [...(revealedGuess ?? guess.word)] : activeRow ? [...draft.padEnd(5, ' ')] : [];
         return <div className={`board-row ${activeRow ? 'active-row' : ''}`} key={row}>{Array.from({ length: 5 }, (_, col) => {
           const letter = letters[col] === ' ' ? '' : letters[col] ?? '';
           const status = guess?.result[col]; const isActive = activeRow && col === activeTile;
