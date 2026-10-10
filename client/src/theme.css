@@ -62,7 +62,7 @@
 :root[data-theme='dark'] .key-action { background: #435448; color: #e5f0e4; }
 :root[data-theme='dark'] .key-correct { background: #4f8963; color: #fff; }
 :root[data-theme='dark'] .key-present { background: #bd8e31; color: #fff; }
-:root[data-theme='dark'] .key-absent { background: #626b63; color: #fff; }
+:root[data-theme='dark'] .key-absent { background: #252c27; color: #a0aaa0; box-shadow: 0 2px 0 #171c19; }
 :root[data-theme='dark'] .opponent-row.is-me { background: linear-gradient(90deg, #29362c, transparent); }
 :root[data-theme='dark'] .opponent-info b,
 :root[data-theme='dark'] .panel-heading h2,
