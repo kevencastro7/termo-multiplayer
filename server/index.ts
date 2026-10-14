@@ -5,11 +5,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Server, Socket } from 'socket.io';
-import type { ClientToServerEvents, MatchView, PublicPlayer, RoomSummary, ServerToClientEvents, TileStatus } from '../shared/types';
+import type { ClientToServerEvents, GameMode, MatchView, PublicPlayer, RoomSummary, ServerToClientEvents, TileStatus } from '../shared/types';
 import { WordService } from './wordService';
 
 const PORT = Number(process.env.PORT ?? 3001);
-const MATCH_MS = 5 * 60 * 1000;
+const MIN_DURATION_MINUTES = 1;
+const MAX_DURATION_MINUTES = 10;
 const app = express();
 app.use(cors());
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -23,7 +24,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { 
 
 interface Guess { word: string; result: TileStatus[]; revealedWord: string }
 interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; elapsedMs?: number }
-interface Room { code: string; hostId: string; solution: string; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; endsAt: number | null; timer?: NodeJS.Timeout }
+interface Room { code: string; hostId: string; solution: string; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; endsAt: number | null; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
@@ -53,10 +54,10 @@ function state(room: Room, playerId: string): MatchView {
     return b.attempts - a.attempts || (b.elapsedMs ?? 0) - (a.elapsedMs ?? 0);
   }).map((p) => ({ ...publicPlayer(p, true), isHost: p.id === room.hostId })) : undefined;
   return {
-    code: room.code, phase: room.phase,
+    code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes,
     players: [...room.players.values()].map((p) => ({ ...publicPlayer(p, reveal), isHost: p.id === room.hostId })),
     guesses: player.guesses.map((g) => ({ ...g })), endsAt: room.endsAt,
-    remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : MATCH_MS,
+    remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.durationMinutes * 60 * 1000,
     me: playerId, ...(reveal ? { solution: room.solution, ranking } : {}),
   };
 }
@@ -105,7 +106,9 @@ function removePlayer(socket: Socket<ClientToServerEvents, ServerToClientEvents>
 
 io.on('connection', (socket) => {
   socket.on('rooms:list', (callback) => callback(roomSummaries()));
-  socket.on('room:create', ({ name }, callback) => {
+  socket.on('room:create', ({ name, gameMode, durationMinutes }, callback) => {
+    if (gameMode !== 'TERMO') return callback({ error: 'Modo de jogo inválido.' });
+    if (!Number.isInteger(durationMinutes) || durationMinutes < MIN_DURATION_MINUTES || durationMinutes > MAX_DURATION_MINUTES) return callback({ error: 'A duração deve ser de 1 a 10 minutos.' });
     const previousCode = socketRoom.get(socket.id);
     const previousRoom = previousCode && rooms.get(previousCode);
     const previousPlayer = previousRoom && [...previousRoom.players.values()].find((player) => player.socketId === socket.id);
@@ -114,7 +117,7 @@ io.on('connection', (socket) => {
     while (rooms.has(roomCode)) roomCode = code();
     const playerId = randomUUID();
     const resumeToken = randomBytes(32).toString('base64url');
-    const room: Room = { code: roomCode, hostId: playerId, solution: '', players: new Map(), phase: 'lobby', endsAt: null };
+    const room: Room = { code: roomCode, hostId: playerId, solution: '', players: new Map(), phase: 'lobby', gameMode, durationMinutes, endsAt: null };
     const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: 'playing' };
     room.players.set(player.id, player); rooms.set(roomCode, room); socketRoom.set(socket.id, roomCode); socket.join(roomCode);
     callback({ code: roomCode, playerId, resumeToken }); broadcast(room); broadcastRooms();
@@ -167,8 +170,9 @@ io.on('connection', (socket) => {
       player.attempts = 0; player.guesses = []; player.elapsedMs = undefined;
       player.status = 'playing';
     }
-    room.phase = 'playing'; room.endsAt = Date.now() + MATCH_MS;
-    room.timer = setTimeout(() => finish(room), MATCH_MS);
+    const roundDurationMs = room.durationMinutes * 60 * 1000;
+    room.phase = 'playing'; room.endsAt = Date.now() + roundDurationMs;
+    room.timer = setTimeout(() => finish(room), roundDurationMs);
     broadcast(room);
     broadcastRooms();
   });
@@ -183,7 +187,7 @@ io.on('connection', (socket) => {
     const result = WordService.score(guess, room.solution);
     player.guesses.push({ word: guess, result, revealedWord: WordService.getCanonicalWord(guess) ?? guess }); player.attempts++;
     if (result.every((tile) => tile === 'correct')) {
-      player.status = 'won'; player.elapsedMs = Date.now() - (room.endsAt! - MATCH_MS);
+      player.status = 'won'; player.elapsedMs = Date.now() - (room.endsAt! - room.durationMinutes * 60 * 1000);
     } else if (player.attempts >= 6) player.status = 'lost';
     broadcast(room);
     const activePlayers = [...room.players.values()].filter((p) => p.status !== 'waiting');

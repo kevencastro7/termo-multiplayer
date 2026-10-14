@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { ClientToServerEvents, MatchView, RoomSummary, ServerToClientEvents, TileStatus } from '../../shared/types';
+import type { ClientToServerEvents, GameMode, MatchView, RoomSummary, ServerToClientEvents, TileStatus } from '../../shared/types';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const LETTER_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
@@ -32,10 +32,13 @@ export function App() {
   const [draft, setDraft] = useState('');
   const [activeTile, setActiveTile] = useState(0);
   const [notice, setNotice] = useState('');
-  const [remaining, setRemaining] = useState(300);
+  const [remaining, setRemaining] = useState(180);
   const [copied, setCopied] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  const [gameMode, setGameMode] = useState<GameMode>('TERMO');
+  const [durationMinutes, setDurationMinutes] = useState(3);
+  const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [resuming, setResuming] = useState(Boolean(readRoomSession()));
   const sessionRef = useRef<RoomSession | null>(readRoomSession());
   const resumeInFlight = useRef(false);
@@ -156,7 +159,7 @@ export function App() {
   const persistName = () => { const value = name.trim() || 'Jogador'; setName(value); localStorage.setItem('termo-name', value); return value; };
   const createRoom = () => {
     if (!socket.connected) { setNotice('Conectando ao servidor… tente novamente em alguns segundos.'); socket.connect(); return; }
-    socket.timeout(5000).emit('room:create', { name: persistName() }, (timeoutError, result) => {
+    socket.timeout(5000).emit('room:create', { name: persistName(), gameMode, durationMinutes }, (timeoutError, result) => {
       if (timeoutError) setNotice('O servidor não respondeu. Confira se npm run dev está rodando.');
       else if (result.error) setNotice(result.error);
     else if (result.code && result.playerId && result.resumeToken) {
@@ -251,7 +254,16 @@ export function App() {
     <p className="intro">Descubra a palavra secreta antes do tempo acabar. Seis tentativas, uma disputa entre amigos.</p>
     <label className="field-label" htmlFor="player-name">COMO PODEMOS TE CHAMAR?</label>
     <input id="player-name" className="text-input" maxLength={18} placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
-    <button className="primary-button landing-create-button" onClick={createRoom}>Criar sala <span>↗</span></button>
+    <div className="landing-create-controls">
+      <button className="primary-button landing-create-button" onClick={createRoom}>Criar sala <span>↗</span></button>
+      <button type="button" className="room-settings-toggle" aria-label="Configurar sala" aria-expanded={roomSettingsOpen} aria-controls="room-settings" onClick={() => setRoomSettingsOpen((open) => !open)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="M19 13.5a7 7 0 0 0 0-3l2-1.2-2-3.4-2.2 1a7 7 0 0 0-2.6-1.5L14 3h-4l-.3 2.4A7 7 0 0 0 7 7L4.8 6l-2 3.4 2 1.2a7 7 0 0 0 0 3l-2 1.2 2 3.4L7 17a7 7 0 0 0 2.7 1.5L10 21h4l.3-2.5a7 7 0 0 0 2.5-1.5l2.2 1 2-3.4-2-1.1Z"/></svg>
+      </button>
+    </div>
+    {roomSettingsOpen && <section className="room-settings" id="room-settings" aria-label="Configurações da sala">
+      <label className="room-setting"><span>Modo de jogo</span><select value={gameMode} onChange={(event) => setGameMode(event.target.value as GameMode)}><option value="TERMO">TERMO</option></select></label>
+      <label className="room-setting"><span>Tempo da rodada</span><select value={durationMinutes} onChange={(event) => setDurationMinutes(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => index + 1).map((minutes) => <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>)}</select></label>
+    </section>}
     <div className="divider"><span>ou entre com um código</span></div>
     <div className="join-row"><input className="text-input code-input" aria-label="Código da sala" maxLength={5} placeholder="CÓDIGO" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} onKeyDown={(e) => { if (e.key === 'Enter') joinRoom(); }} /><button className="secondary-button" onClick={joinRoom} disabled={roomCode.length !== 5}>Entrar</button></div>
     <section className="available-rooms" aria-label="Salas disponíveis">
@@ -264,13 +276,13 @@ export function App() {
         </button>;
       })}</div>}
     </section>
-    <p className="landing-foot"><span>◷</span> 5 minutos <i/> <span>⌁</span> Até 6 tentativas</p>
+    <p className="landing-foot"><span>◷</span> {durationMinutes} {durationMinutes === 1 ? 'minuto' : 'minutos'} <i/> <span>⌁</span> Até 6 tentativas</p>
     {notice && <div className="toast" role="status">{notice}</div>}
   </div><div className="landing-stamp">FEITO PARA<br/>JOGAR JUNTO <span>✳</span></div></main>;
 
   if (match.phase === 'lobby') {
     const isHost = match.players.find((p) => p.id === match.me)?.isHost;
-    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><h2>Na sala <span>{match.players.length}</span></h2><div className="player-list">{match.players.map((p, i) => <div className="player-row" key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><span>{p.name}{p.id === match.me && <small> · você</small>}</span>{p.isHost && <span className="host-tag">ANFITRIÃO</span>}</div>)}</div>{isHost ? <button className="primary-button" onClick={() => socket.emit('match:start')}>Começar partida <span>↗</span></button> : <div className="waiting-note"><span className="live-dot"/> Aguardando o anfitrião…</div>}<p className="lobby-note">Até 12 jogadores · partidas de 5 minutos</p></section>{notice && <div className="toast">{notice}</div>}</main>;
+    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><h2>Na sala <span>{match.players.length}</span></h2><div className="player-list">{match.players.map((p, i) => <div className="player-row" key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><span>{p.name}{p.id === match.me && <small> · você</small>}</span>{p.isHost && <span className="host-tag">ANFITRIÃO</span>}</div>)}</div>{isHost ? <button className="primary-button" onClick={() => socket.emit('match:start')}>Começar partida <span>↗</span></button> : <div className="waiting-note"><span className="live-dot"/> Aguardando o anfitrião…</div>}<p className="lobby-note">Até 12 jogadores · partidas de {match.durationMinutes} {match.durationMinutes === 1 ? 'minuto' : 'minutos'}</p></section>{notice && <div className="toast">{notice}</div>}</main>;
   }
 
   const me = match.players.find((p) => p.id === match.me);

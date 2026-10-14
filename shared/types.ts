@@ -1,4 +1,5 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
+export type GameMode = 'TERMO' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
@@ -7,6 +8,7 @@ export interface PublicPlayer {
 }
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
+  gameMode: GameMode; durationMinutes: number;
   guesses: GuessView[]; endsAt: number | null; remainingMs: number;
   solution?: string; ranking?: PublicPlayer[]; me: string;
 }
@@ -20,7 +22,7 @@ export interface ServerToClientEvents {
 }
 export interface ClientToServerEvents {
   'rooms:list': (callback: (rooms: RoomSummary[]) => void) => void;
-  'room:create': (payload: { name: string }, callback: (result: { code?: string; playerId?: string; resumeToken?: string; error?: string }) => void) => void;
+  'room:create': (payload: { name: string; gameMode: GameMode; durationMinutes: number }, callback: (result: { code?: string; playerId?: string; resumeToken?: string; error?: string }) => void) => void;
   'room:join': (payload: { code: string; name: string }, callback: (result: { playerId?: string; resumeToken?: string; error?: string }) => void) => void;
   'room:resume': (payload: { playerId: string; resumeToken: string }, callback: (result: { state?: MatchView; error?: string }) => void) => void;
   'match:start': () => void;
