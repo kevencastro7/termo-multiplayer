@@ -1,5 +1,5 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
-export type GameMode = 'TERMO' | (string & {});
+export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';

@@ -38,6 +38,7 @@ export function App() {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [gameMode, setGameMode] = useState<GameMode>('TERMO');
   const [durationMinutes, setDurationMinutes] = useState(3);
+  const modeDefaultDuration: Record<GameMode, number> = { TERMO: 3, DUETO: 4, QUARTETO: 5 };
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [resuming, setResuming] = useState(Boolean(readRoomSession()));
   const sessionRef = useRef<RoomSession | null>(readRoomSession());
@@ -250,13 +251,13 @@ export function App() {
 
   const formattedTime = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
   const finished = match?.phase === 'finished';
-  const guessLimit = match?.gameMode === 'DUETO' ? 7 : 6;
+  const guessLimit = match?.gameMode === 'QUARTETO' ? 9 : match?.gameMode === 'DUETO' ? 7 : 6;
 
   if (!match && resuming) return <main className="landing"><div className="landing-card"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><p className="intro">Reconectando à sua sala…</p>{notice && <div className="toast" role="status">{notice}</div>}</div></main>;
   if (!match) return <main className="landing"><div className="landing-card landing-card-home">
     <div className="landing-brand-row"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span><span className={`connection-status ${connected ? 'is-connected' : ''}`}><i/>{connected ? 'CONECTADO' : 'CONECTANDO'}</span></div>{themeToggle}</div>
     <p className="eyebrow">PALAVRAS EM BOA COMPANHIA</p><h1>Uma palavra.<br/><span>Todo mundo junto.</span></h1>
-    <p className="intro">Descubra {gameMode === 'DUETO' ? 'duas palavras com até sete tentativas compartilhadas' : 'a palavra secreta em até seis tentativas'} antes do tempo acabar.</p>
+    <p className="intro">{gameMode === 'QUARTETO' ? 'Descubra quatro palavras com até nove tentativas compartilhadas' : gameMode === 'DUETO' ? 'Descubra duas palavras com até sete tentativas compartilhadas' : 'Descubra a palavra secreta em até seis tentativas'} antes do tempo acabar.</p>
     <label className="field-label" htmlFor="player-name">COMO PODEMOS TE CHAMAR?</label>
     <input id="player-name" className="text-input" maxLength={18} placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
     <div className="landing-create-controls">
@@ -266,7 +267,7 @@ export function App() {
       </button>
     </div>
     {roomSettingsOpen && <section className="room-settings" id="room-settings" aria-label="Configurações da sala">
-      <label className="room-setting"><span>Modo de jogo</span><select value={gameMode} onChange={(event) => setGameMode(event.target.value as GameMode)}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option></select></label>
+      <label className="room-setting"><span>Modo de jogo</span><select value={gameMode} onChange={(event) => { const mode = event.target.value as GameMode; setGameMode(mode); setDurationMinutes(modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option></select></label>
       <label className="room-setting"><span>Tempo da rodada</span><select value={durationMinutes} onChange={(event) => setDurationMinutes(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => index + 1).map((minutes) => <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>)}</select></label>
     </section>}
     <div className="divider"><span>ou entre com um código</span></div>
@@ -293,13 +294,13 @@ export function App() {
   const me = match.players.find((p) => p.id === match.me);
   const waitingNextRound = match.phase === 'playing' && me?.status === 'waiting';
   const canPlay = !finished && !waitingNextRound && me?.status === 'playing';
-  const boardCount = match.gameMode === 'DUETO' ? 2 : 1;
-  const solvedBoards = Array.from({ length: boardCount }, (_, boardIndex) => match.gameMode === 'DUETO' && match.guesses.some((guess) => guess.results?.[boardIndex]?.every((tile) => tile === 'correct')));
+  const boardCount = match.gameMode === 'QUARTETO' ? 4 : match.gameMode === 'DUETO' ? 2 : 1;
+  const solvedBoards = Array.from({ length: boardCount }, (_, boardIndex) => boardCount > 1 && match.guesses.some((guess) => guess.results?.[boardIndex]?.every((tile) => tile === 'correct')));
   if (waitingNextRound) return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card waiting-card"><div className="lobby-icon">◷</div><p className="eyebrow">RODADA EM ANDAMENTO</p><h1>Você chegou!</h1><p className="intro">Aguarde esta rodada terminar. Você entrará na sala e poderá jogar na próxima.</p><div className="waiting-room-code">SALA <b>{match.code}</b></div><div className="waiting-note"><span className="live-dot"/> Próxima rodada em breve</div></section>{notice && <div className="toast">{notice}</div>}</main>;
   return <main className="game-page"><header className="topbar game-topbar"><button className="brand brand-button" onClick={leave}><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></button><div className={`timer ${remaining <= 30 ? 'timer-urgent' : ''}`}><span>◷</span>{formattedTime}</div><div className="topbar-actions">{themeToggle}<button className="quiet-button share-button" onClick={copyInvite}>{copied ? 'Copiado ✓' : 'Convidar ↗'}</button></div></header>
     <div className="game-layout"><section className="board-column"><div className="match-heading"><span className="live-dot"/> SALA <b>{match.code}</b><span className="heading-sep">·</span> <span>{match.players.length} jogadores</span></div>
-      <div className={`boards ${boardCount === 2 ? 'boards-dueto' : ''}`}>{Array.from({ length: boardCount }, (_, boardIndex) => <section className={`board-column ${solvedBoards[boardIndex] ? 'board-solved' : ''}`} key={boardIndex}>
-        {boardCount === 2 && <h2 className="dueto-board-label">PALAVRA {boardIndex + 1}{solvedBoards[boardIndex] && <span> ✓</span>}</h2>}
+      <div className={`boards ${boardCount === 2 ? 'boards-dueto' : boardCount === 4 ? 'boards-quarteto' : ''}`}>{Array.from({ length: boardCount }, (_, boardIndex) => <section className={`board-column ${solvedBoards[boardIndex] ? 'board-solved' : ''}`} key={boardIndex}>
+        {boardCount > 1 && <h2 className="dueto-board-label">PALAVRA {boardIndex + 1}{solvedBoards[boardIndex] && <span> ✓</span>}</h2>}
         <div className="board" role="group" aria-label={`Tabuleiro ${boardIndex + 1}, até ${guessLimit} tentativas`}>{Array.from({ length: guessLimit }, (_, row) => {
           const guess = match.guesses[row];
           const results = guess ? (guess.results ?? [guess.result]) : undefined;
@@ -316,9 +317,9 @@ export function App() {
         })}</div>
       </section>)}</div>
       {canPlay ? <section className="keyboard" aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => <button key={letter} className={`key ${keyStatuses.has(letter) ? `key-${keyStatuses.get(letter)}` : ''}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>)}{ri === 1 && <button className="key key-action key-delete" aria-label="Apagar" onClick={() => { vibrateForVirtualKey(); backspace(); }}>⌫</button>}{ri === 2 && <button className="key key-action" onClick={() => { vibrateForVirtualKey(); submitGuess(); }}>↵</button>}</div>)}</section> : <div className="board-spacer"/>}
-      <div className="board-caption">{finished ? `A palavra era ${match.solutions?.join(' e ') ?? match.solution}` : canPlay ? match.gameMode === 'DUETO' && solvedBoards.some(Boolean) ? 'UMA PALAVRA RESOLVIDA — CONTINUE NA OUTRA' : 'TOQUE EM UMA CASA PARA ESCOLHER ONDE DIGITAR' : 'SUA PARTIDA FOI CONCLUÍDA'}</div>
+      <div className="board-caption">{finished ? `A palavra era ${match.solutions?.join(' · ') ?? match.solution}` : canPlay ? boardCount > 1 && solvedBoards.some(Boolean) ? 'PALAVRAS RESOLVIDAS FICAM BLOQUEADAS — CONTINUE NAS OUTRAS' : 'TOQUE EM UMA CASA PARA ESCOLHER ONDE DIGITAR' : 'SUA PARTIDA FOI CONCLUÍDA'}</div>
     </section><aside className="players-panel"><div className="panel-heading"><div><p className="eyebrow">AO VIVO</p><h2>Na disputa <span>{match.players.length}</span></h2></div><span className="signal">●</span></div>
-      <div className="opponent-list">{match.players.map((p, i) => <div className={`opponent-row ${p.id === match.me ? 'is-me' : ''}`} key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><div className="opponent-info"><b>{p.name}{p.id === match.me && <small> (você)</small>}</b><span>{p.status === 'won' ? (match.gameMode === 'DUETO' ? 'As duas palavras descobertas!' : 'Palavra descoberta!') : p.status === 'lost' ? 'Tentativas encerradas' : p.attempts === 0 ? 'Pensando...' : `${p.attempts} de ${guessLimit} tentativas`}</span></div><div className={`attempt-count ${p.status === 'won' ? 'count-won' : ''}`}>{p.status === 'won' ? '✓' : `${p.attempts}/${guessLimit}`}</div></div>)}</div>
+      <div className="opponent-list">{match.players.map((p, i) => <div className={`opponent-row ${p.id === match.me ? 'is-me' : ''}`} key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><div className="opponent-info"><b>{p.name}{p.id === match.me && <small> (você)</small>}</b><span>{p.status === 'won' ? (boardCount > 1 ? 'Todas as palavras descobertas!' : 'Palavra descoberta!') : p.status === 'lost' ? 'Tentativas encerradas' : p.attempts === 0 ? 'Pensando...' : `${p.attempts} de ${guessLimit} tentativas`}</span></div><div className={`attempt-count ${p.status === 'won' ? 'count-won' : ''}`}>{p.status === 'won' ? '✓' : `${p.attempts}/${guessLimit}`}</div></div>)}</div>
       {finished && match.ranking && <div className="ranking"><p className="eyebrow">RESULTADO FINAL</p><h3>Placar da rodada</h3>{match.ranking.map((p, i) => <div className="rank-row" key={p.id}><strong>{String(i + 1).padStart(2, '0')}</strong><span>{p.name}</span><small>{p.status === 'won' ? `${p.guessesUsed} ${p.guessesUsed === 1 ? 'tentativa' : 'tentativas'} · ${((p.elapsedMs ?? 0) / 1000).toFixed(1)}s` : `Não resolveu · ${p.attempts}/${guessLimit}`}</small></div>)}</div>}
       {finished && <button className="primary-button play-again" onClick={returnToLobby}>Voltar ao lobby <span>↗</span></button>}
     </aside></div>
