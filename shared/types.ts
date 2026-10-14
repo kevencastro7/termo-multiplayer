@@ -1,6 +1,6 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
 export type GameMode = 'TERMO' | (string & {});
-export interface GuessView { word: string; result: TileStatus[]; revealedWord?: string }
+export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
   isHost: boolean;
@@ -10,7 +10,7 @@ export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
   gameMode: GameMode; durationMinutes: number;
   guesses: GuessView[]; endsAt: number | null; remainingMs: number;
-  solution?: string; ranking?: PublicPlayer[]; me: string;
+  solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;
 }
 export interface RoomSummary { code: string; playerCount: number; capacity: number; phase: RoomPhase }
 export type RoomPhase = MatchView['phase'];
