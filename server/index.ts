@@ -44,20 +44,44 @@ function publicPlayer(player: Player, reveal = false, roundStartedAt?: number): 
     isHost: false,
     ...(player.status === 'won' || (reveal && player.status !== 'playing') ? { guessesUsed: player.attempts, elapsedMs: player.elapsedMs ?? (roundStartedAt ? Date.now() - roundStartedAt : undefined) } : {}) };
 }
+function solvedBoardCount(player: Player, boardCount: number): number {
+  return Array.from({ length: boardCount }, (_, boardIndex) => player.guesses.some((guess) => {
+    const results = guess.results ?? [guess.result];
+    return results[boardIndex]?.every((tile) => tile === 'correct') === true;
+  })).filter(Boolean).length;
+}
 function state(room: Room, playerId: string): MatchView {
   const player = room.players.get(playerId)!;
   const reveal = room.phase === 'finished';
   const roundStartedAt = room.endsAt ? room.endsAt - room.durationMinutes * 60 * 1000 : undefined;
+  const boardCount = room.gameMode === 'QUARTETO' ? 4 : room.gameMode === 'DUETO' ? 2 : 1;
   const rankedPlayers = [...room.players.values()].filter((participant) => participant.status !== 'waiting').sort((a, b) => {
     const aSolved = a.status === 'won'; const bSolved = b.status === 'won';
     if (aSolved !== bSolved) return aSolved ? -1 : 1;
     if (aSolved && bSolved) return a.attempts - b.attempts || (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity);
-    return a.attempts - b.attempts;
+    if (room.gameMode === 'TERMO') return 0;
+    return solvedBoardCount(b, boardCount) - solvedBoardCount(a, boardCount);
   });
-  const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), isHost: participant.id === room.hostId })) : undefined;
+  const finalRanks = new Map<string, number>();
+  if (reveal) {
+    let previous: Player | undefined;
+    let previousRank = 0;
+    rankedPlayers.forEach((participant, index) => {
+      const tied = previous !== undefined && (() => {
+        if (participant.status === 'won' && previous!.status === 'won') return participant.attempts === previous!.attempts && participant.elapsedMs === previous!.elapsedMs;
+        if (participant.status !== 'won' && previous!.status !== 'won') return room.gameMode === 'TERMO' || solvedBoardCount(participant, boardCount) === solvedBoardCount(previous!, boardCount);
+        return false;
+      })();
+      const rank = tied ? previousRank : index + 1;
+      finalRanks.set(participant.id, rank);
+      previous = participant;
+      previousRank = rank;
+    });
+  }
+  const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), isHost: participant.id === room.hostId, rank: finalRanks.get(participant.id)! })) : undefined;
   return {
     code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes,
-    players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
+    players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g })), endsAt: room.endsAt,
     remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.durationMinutes * 60 * 1000,
     me: playerId, ...(reveal ? { solution: room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ranking } : {}),
