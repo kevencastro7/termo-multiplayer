@@ -216,6 +216,15 @@ io.on('connection', (socket) => {
     const activePlayers = [...room.players.values()].filter((p) => p.status !== 'waiting');
     if (activePlayers.length > 0 && activePlayers.every((p) => p.status !== 'playing')) finish(room);
   });
+  socket.on('match:give-up', () => {
+    const room = rooms.get(socketRoom.get(socket.id) ?? '');
+    const player = room && [...room.players.values()].find((candidate) => candidate.socketId === socket.id);
+    if (!room || room.phase !== 'playing' || !player || player.status !== 'playing') return;
+    player.status = 'lost';
+    broadcast(room);
+    const activePlayers = [...room.players.values()].filter((participant) => participant.status !== 'waiting');
+    if (activePlayers.length > 0 && activePlayers.every((participant) => participant.status !== 'playing')) finish(room);
+  });
   socket.on('room:return-lobby', () => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     const player = room && [...room.players.values()].find((candidate) => candidate.socketId === socket.id);

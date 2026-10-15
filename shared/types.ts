@@ -27,6 +27,7 @@ export interface ClientToServerEvents {
   'room:update-settings': (payload: { gameMode: GameMode; durationMinutes: number }) => void;
   'room:resume': (payload: { playerId: string; resumeToken: string }, callback: (result: { state?: MatchView; error?: string }) => void) => void;
   'match:start': () => void;
+  'match:give-up': () => void;
   'room:return-lobby': () => void;
   'guess:submit': (payload: { word: string }) => void;
   'room:leave': () => void;
