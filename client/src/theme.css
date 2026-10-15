@@ -68,6 +68,13 @@
 :root[data-theme='dark'] .panel-heading h2,
 :root[data-theme='dark'] .ranking h3,
 :root[data-theme='dark'] .rank-row > span { color: #e6ece4; }
+:root[data-theme='dark'] .results-panel .ranking h2,
+:root[data-theme='dark'] .final-rank-row > span:not(.winner-row-trophy) { color: #e6ece4; }
+:root[data-theme='dark'] .final-rank-row { border-color: #343d36; }
+:root[data-theme='dark'] .final-rank-winner { border-color: #806b37; background: linear-gradient(100deg, #38321f, #252a22 75%); box-shadow: 0 5px 18px #0003; }
+:root[data-theme='dark'] .final-rank-row > small,
+:root[data-theme='dark'] .revealed-solutions { color: #aeb8ac; }
+:root[data-theme='dark'] .winner-score { color: #a8c4a8; }
 :root[data-theme='dark'] .opponent-info b small { color: #aab4a9; }
 :root[data-theme='dark'] .attempt-count { color: #b3bdb2; }
 :root[data-theme='dark'] .landing-stamp { color: #8e9b90; }
