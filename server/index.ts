@@ -160,6 +160,17 @@ io.on('connection', (socket) => {
     broadcast(room);
     broadcastRooms();
   });
+  socket.on('room:update-settings', ({ gameMode, durationMinutes }) => {
+    const room = rooms.get(socketRoom.get(socket.id) ?? '');
+    const playerId = room && [...room.players.values()].find((player) => player.socketId === socket.id)?.id;
+    if (!room || room.phase !== 'lobby' || room.hostId !== playerId) return;
+    if (gameMode !== 'TERMO' && gameMode !== 'DUETO' && gameMode !== 'QUARTETO') return socket.emit('match:error', 'Modo de jogo inválido.');
+    if (!Number.isInteger(durationMinutes) || durationMinutes < MIN_DURATION_MINUTES || durationMinutes > MAX_DURATION_MINUTES) return socket.emit('match:error', 'A duração deve ser de 1 a 10 minutos.');
+    room.gameMode = gameMode;
+    room.durationMinutes = durationMinutes;
+    broadcast(room);
+    broadcastRooms();
+  });
   socket.on('match:start', () => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     if (!room || room.phase !== 'lobby') return;

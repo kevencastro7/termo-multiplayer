@@ -24,6 +24,7 @@ export interface ClientToServerEvents {
   'rooms:list': (callback: (rooms: RoomSummary[]) => void) => void;
   'room:create': (payload: { name: string; gameMode: GameMode; durationMinutes: number }, callback: (result: { code?: string; playerId?: string; resumeToken?: string; error?: string }) => void) => void;
   'room:join': (payload: { code: string; name: string }, callback: (result: { playerId?: string; resumeToken?: string; error?: string }) => void) => void;
+  'room:update-settings': (payload: { gameMode: GameMode; durationMinutes: number }) => void;
   'room:resume': (payload: { playerId: string; resumeToken: string }, callback: (result: { state?: MatchView; error?: string }) => void) => void;
   'match:start': () => void;
   'room:return-lobby': () => void;
