@@ -3,7 +3,7 @@ export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
-  isHost: boolean;
+  isHost: boolean; rank?: number;
   guessesUsed?: number; elapsedMs?: number;
 }
 export interface MatchView {

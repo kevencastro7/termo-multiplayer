@@ -39,23 +39,25 @@ function code(): string {
   for (let i = 0; i < 5; i++) value += alphabet[randomInt(alphabet.length)];
   return value;
 }
-function publicPlayer(player: Player, reveal = false): PublicPlayer {
+function publicPlayer(player: Player, reveal = false, roundStartedAt?: number): PublicPlayer {
   return { id: player.id, name: player.name, attempts: player.attempts, status: player.status,
     isHost: false,
-    ...(reveal && player.status !== 'playing' ? { guessesUsed: player.attempts, elapsedMs: player.elapsedMs } : {}) };
+    ...(player.status === 'won' || (reveal && player.status !== 'playing') ? { guessesUsed: player.attempts, elapsedMs: player.elapsedMs ?? (roundStartedAt ? Date.now() - roundStartedAt : undefined) } : {}) };
 }
 function state(room: Room, playerId: string): MatchView {
   const player = room.players.get(playerId)!;
   const reveal = room.phase === 'finished';
-  const ranking = reveal ? [...room.players.values()].filter((player) => player.status !== 'waiting').sort((a, b) => {
+  const roundStartedAt = room.endsAt ? room.endsAt - room.durationMinutes * 60 * 1000 : undefined;
+  const rankedPlayers = [...room.players.values()].filter((participant) => participant.status !== 'waiting').sort((a, b) => {
     const aSolved = a.status === 'won'; const bSolved = b.status === 'won';
     if (aSolved !== bSolved) return aSolved ? -1 : 1;
     if (aSolved && bSolved) return a.attempts - b.attempts || (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity);
-    return b.attempts - a.attempts || (b.elapsedMs ?? 0) - (a.elapsedMs ?? 0);
-  }).map((p) => ({ ...publicPlayer(p, true), isHost: p.id === room.hostId })) : undefined;
+    return a.attempts - b.attempts;
+  });
+  const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), isHost: participant.id === room.hostId })) : undefined;
   return {
     code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes,
-    players: [...room.players.values()].map((p) => ({ ...publicPlayer(p, reveal), isHost: p.id === room.hostId })),
+    players: rankedPlayers.map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g })), endsAt: room.endsAt,
     remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.durationMinutes * 60 * 1000,
     me: playerId, ...(reveal ? { solution: room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ranking } : {}),
