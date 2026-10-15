@@ -27,6 +27,7 @@ export function App() {
     localStorage.getItem('termo-theme') === 'light' ? 'light' : 'dark',
   );
   const [match, setMatch] = useState<MatchView | null>(null);
+  const matchRef = useRef<MatchView | null>(match);
   const [name, setName] = useState(() => localStorage.getItem('termo-name') ?? '');
   const [roomCode, setRoomCode] = useState(() => new URLSearchParams(window.location.search).get('room')?.toUpperCase().slice(0, 5) ?? '');
   const [draft, setDraft] = useState('');
@@ -62,7 +63,14 @@ export function App() {
   ><span aria-hidden="true">{theme === 'dark' ? '☼' : '☾'}</span><span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span></button>;
 
   useEffect(() => {
-    const onState = (state: MatchView) => { setMatch(state); setResuming(false); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice(''); };
+    const onState = (state: MatchView) => {
+      const previousPhase = matchRef.current?.phase;
+      if ((previousPhase === 'playing' && state.phase === 'finished') || (previousPhase === 'finished' && state.phase === 'lobby')) {
+        setDraft(''); draftRef.current = ''; setActiveTile(0);
+      }
+      matchRef.current = state;
+      setMatch(state); setResuming(false); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice('');
+    };
     const onRoomsState = (availableRooms: RoomSummary[]) => setRooms(availableRooms);
     const onError = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 2800); };
     const resumeRoom = () => {
@@ -81,6 +89,7 @@ export function App() {
           sessionRef.current = null;
           localStorage.removeItem(SESSION_KEY);
           sessionStorage.removeItem(SESSION_KEY);
+          matchRef.current = null;
           setMatch(null);
           setRoomCode(session.code);
           setResuming(false);
@@ -88,6 +97,11 @@ export function App() {
           return;
         }
         if (result.state) {
+          const previousPhase = matchRef.current?.phase;
+          if ((previousPhase === 'playing' && result.state.phase === 'finished') || (previousPhase === 'finished' && result.state.phase === 'lobby')) {
+            setDraft(''); draftRef.current = ''; setActiveTile(0);
+          }
+          matchRef.current = result.state;
           setMatch(result.state);
           setRemaining(Math.ceil(result.state.remainingMs / 1000));
           setResuming(false);
