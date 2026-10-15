@@ -15,7 +15,7 @@ export class WordService {
       .filter((word) => [...word].length === 5 && this.isValidFormat(word));
     if (!words.length) throw new Error(`No valid words found at ${WORDS_FILE_PATH}`);
     this.allWords = [...new Set(words)];
-    this.targetWords = this.allWords.slice(0, 2000);
+    this.targetWords = this.allWords.slice(0, 1000);
     this.normalizedMap = new Map(this.allWords.map((word) => [this.normalizeWord(word), word]));
     console.info(`Loaded ${this.allWords.length} guess words; ${this.targetWords.length} target words.`);
   }
