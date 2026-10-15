@@ -29,7 +29,7 @@ const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
 function roomSummaries(): RoomSummary[] {
-  return [...rooms.values()].map((room) => ({ code: room.code, playerCount: room.players.size, capacity: 12, phase: room.phase }));
+  return [...rooms.values()].map((room) => ({ code: room.code, playerCount: room.players.size, capacity: 12, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes }));
 }
 function broadcastRooms(): void { io.emit('rooms:state', roomSummaries()); }
 

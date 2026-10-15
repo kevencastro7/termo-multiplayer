@@ -278,7 +278,7 @@ export function App() {
         const full = room.playerCount >= room.capacity;
         const status = room.phase === 'lobby' ? 'No lobby' : room.phase === 'playing' ? 'Em partida' : 'Rodada encerrada';
         return <button type="button" className="available-room" key={room.code} onClick={() => { setRoomCode(room.code); if (socket.connected) socket.timeout(5000).emit('room:join', { code: room.code, name: persistName() }, (timeoutError, result) => { if (timeoutError) setNotice('O servidor não respondeu. Tente novamente.'); else if (result.error) setNotice(result.error); else if (result.playerId && result.resumeToken) { const session = { code: room.code, playerId: result.playerId, resumeToken: result.resumeToken }; sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } }); else socket.connect(); }}>
-          <span className="available-room-code">{room.code}</span><span className="available-room-meta"><span>{status}</span><span>{room.playerCount}/{room.capacity} jogadores</span></span><span className="available-room-action">{full ? 'Cheia' : 'Entrar ↗'}</span>
+          <span className="available-room-code">{room.code}</span><span className="available-room-meta"><span>{room.gameMode} · {room.durationMinutes} {room.durationMinutes === 1 ? 'minuto' : 'minutos'}</span><span>{status} · {room.playerCount}/{room.capacity} jogadores</span></span><span className="available-room-action">{full ? 'Cheia' : 'Entrar ↗'}</span>
         </button>;
       })}</div>}
     </section>

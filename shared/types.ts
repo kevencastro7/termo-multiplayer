@@ -12,7 +12,7 @@ export interface MatchView {
   guesses: GuessView[]; endsAt: number | null; remainingMs: number;
   solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;
 }
-export interface RoomSummary { code: string; playerCount: number; capacity: number; phase: RoomPhase }
+export interface RoomSummary { code: string; playerCount: number; capacity: number; phase: RoomPhase; gameMode: GameMode; durationMinutes: number }
 export type RoomPhase = MatchView['phase'];
 export interface ServerToClientEvents {
   'match:state': (match: MatchView) => void;
