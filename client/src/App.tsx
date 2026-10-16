@@ -253,11 +253,11 @@ export function App() {
   const boardCount = match?.gameMode === 'QUARTETO' ? 4 : match?.gameMode === 'DUETO' ? 2 : 1;
   const solvedBoards = Array.from({ length: boardCount }, (_, boardIndex) => boardCount > 1 && (match?.guesses ?? []).some((guess) => guess.results?.[boardIndex]?.every((tile) => tile === 'correct')));
   const keyStatuses = useMemo(() => {
-    if (match?.gameMode === 'DUETO') {
-      const maps = [new Map<string, TileStatus>(), new Map<string, TileStatus>()];
+    if (match?.gameMode === 'DUETO' || match?.gameMode === 'QUARTETO') {
+      const maps = Array.from({ length: boardCount }, () => new Map<string, TileStatus>());
       for (const guess of match.guesses) {
         const resultSets = guess.results ?? [guess.result];
-        for (let boardIndex = 0; boardIndex < 2; boardIndex++) {
+        for (let boardIndex = 0; boardIndex < boardCount; boardIndex++) {
           const map = maps[boardIndex];
           if (solvedBoards[boardIndex]) {
             for (const letter of guess.word) map.set(letter, 'absent');
@@ -282,7 +282,7 @@ export function App() {
       });
     }
     return map;
-  }, [match?.gameMode, match?.guesses, solvedBoards[0], solvedBoards[1]]);
+  }, [boardCount, match?.gameMode, match?.guesses, solvedBoards.join(',')]);
 
   const formattedTime = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
   const finished = match?.phase === 'finished';
@@ -350,13 +350,16 @@ export function App() {
           })}</div>;
         })}</div>
       </section>)}</div>
-      {canPlay ? <section className={`keyboard ${match.gameMode === 'DUETO' ? 'keyboard-dueto' : ''}`} aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => {
-        if (match.gameMode === 'DUETO') {
-          const statuses = keyStatuses as [Map<string, TileStatus>, Map<string, TileStatus>];
-          const first = statuses[0].get(letter); const second = statuses[1].get(letter);
-          const firstClass = solvedBoards[0] ? (first ? 'absent' : 'neutral') : first ?? 'neutral';
-          const secondClass = solvedBoards[1] ? (second ? 'absent' : 'neutral') : second ?? 'neutral';
-          return <button key={letter} className={`key key-split key-left-${firstClass} key-right-${secondClass}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>;
+      {canPlay ? <section className={`keyboard ${match.gameMode === 'DUETO' ? 'keyboard-dueto' : match.gameMode === 'QUARTETO' ? 'keyboard-quarteto' : ''}`} aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => {
+        if (match.gameMode === 'DUETO' || match.gameMode === 'QUARTETO') {
+          const statuses = keyStatuses as Map<string, TileStatus>[];
+          const segmentClasses = statuses.map((map, boardIndex) => {
+            const status = map.get(letter);
+            return solvedBoards[boardIndex] ? (status ? 'absent' : 'neutral') : status ?? 'neutral';
+          });
+          const segmentNames = boardCount === 4 ? ['top-left', 'top-right', 'bottom-left', 'bottom-right'] : ['left', 'right'];
+          const segmentClassNames = segmentClasses.map((status, index) => `key-${segmentNames[index]}-${status}`).join(' ');
+          return <button key={letter} className={`key key-split key-split-${boardCount} ${segmentClassNames}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>;
         }
         const status = (keyStatuses as Map<string, TileStatus>).get(letter);
         return <button key={letter} className={`key ${status ? `key-${status}` : ''}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>;
