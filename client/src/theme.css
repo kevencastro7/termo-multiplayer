@@ -63,6 +63,15 @@
 :root[data-theme='dark'] .key-correct { background: #4f8963; color: #fff; }
 :root[data-theme='dark'] .key-present { background: #bd8e31; color: #fff; }
 :root[data-theme='dark'] .key-absent { background: #252c27; color: #a0aaa0; box-shadow: 0 2px 0 #171c19; }
+:root[data-theme='dark'] .key.key-split { color: #fff; background: linear-gradient(90deg, var(--key-left) 0 50%, var(--key-right) 50% 100%); box-shadow: 0 2px 0 #252c27; }
+:root[data-theme='dark'] .key-left-neutral { --key-left: #374139; }
+:root[data-theme='dark'] .key-right-neutral { --key-right: #374139; }
+:root[data-theme='dark'] .key-left-correct { --key-left: #4f8963; }
+:root[data-theme='dark'] .key-right-correct { --key-right: #4f8963; }
+:root[data-theme='dark'] .key-left-present { --key-left: #bd8e31; }
+:root[data-theme='dark'] .key-right-present { --key-right: #bd8e31; }
+:root[data-theme='dark'] .key-left-absent { --key-left: #252c27; }
+:root[data-theme='dark'] .key-right-absent { --key-right: #252c27; }
 :root[data-theme='dark'] .opponent-row.is-me { background: linear-gradient(90deg, #29362c, transparent); }
 :root[data-theme='dark'] .opponent-info b,
 :root[data-theme='dark'] .panel-heading h2,
