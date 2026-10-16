@@ -12,7 +12,7 @@
 :root[data-theme='dark'] .landing { background: radial-gradient(ellipse at 50% 45%, #202822 0, #151a17 68%); }
 :root[data-theme='dark'] .landing-card,
 :root[data-theme='dark'] .lobby-card,
-:root[data-theme='dark'] .players-panel { background: #1d241f; border-color: #303a32; box-shadow: 0 24px 70px #0003; }
+:root[data-theme='dark'] .players-panel { background: #191f1b; border-color: #303a32; box-shadow: 0 24px 70px #0003; }
 :root[data-theme='dark'] .brand-mark { background: #79a487; color: #142019; }
 :root[data-theme='dark'] .brand-dot,
 :root[data-theme='dark'] .landing h1 span { color: #9ac0a0; }
@@ -29,6 +29,11 @@
 :root[data-theme='dark'] .divider,
 :root[data-theme='dark'] .quiet-button { color: #b5bdb3; }
 :root[data-theme='dark'] .text-input { background: #151b17; color: #f1f3ee; border-color: #414b43; }
+:root[data-theme='dark'] .room-setting select { background: #151a17; color: #edf0e9; border-color: #303832; color-scheme: dark; }
+:root[data-theme='dark'] .room-settings,
+:root[data-theme='dark'] .lobby-settings { background: #191f1b; border-color: #303832; }
+:root[data-theme='dark'] .room-settings-toggle { background: #252e27; border-color: #465148; color: #e0e9df; }
+:root[data-theme='dark'] .room-setting { color: #a4ada2; }
 :root[data-theme='dark'] .text-input::placeholder { color: #7f8a80; }
 :root[data-theme='dark'] .primary-button { background: #6c9877; color: #101a13; }
 :root[data-theme='dark'] .primary-button:hover { background: #83ad8c; }
