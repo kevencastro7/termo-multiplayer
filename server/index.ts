@@ -23,7 +23,7 @@ const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { cors: { origin: true } });
 
 interface Guess { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord: string }
-interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; elapsedMs?: number }
+interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; elapsedMs?: number; wins: number; returnedToLobby: boolean }
 interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; endsAt: number | null; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
@@ -40,7 +40,7 @@ function code(): string {
   return value;
 }
 function publicPlayer(player: Player, reveal = false, roundStartedAt?: number): PublicPlayer {
-  return { id: player.id, name: player.name, attempts: player.attempts, status: player.status,
+  return { id: player.id, name: player.name, attempts: player.attempts, status: player.status, wins: player.wins, returnedToLobby: player.returnedToLobby,
     isHost: false,
     ...(player.status === 'won' || (reveal && player.status !== 'playing') ? { guessesUsed: player.attempts, elapsedMs: player.elapsedMs ?? (roundStartedAt ? Date.now() - roundStartedAt : undefined) } : {}) };
 }
@@ -79,11 +79,12 @@ function state(room: Room, playerId: string): MatchView {
     });
   }
   const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), isHost: participant.id === room.hostId, rank: finalRanks.get(participant.id)! })) : undefined;
+  const winsRanking = [...room.players.values()].map((participant) => ({ ...publicPlayer(participant), isHost: participant.id === room.hostId })).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
   return {
     code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes,
     players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g })), endsAt: room.endsAt,
-    remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.durationMinutes * 60 * 1000,
+    remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.durationMinutes * 60 * 1000, winsRanking,
     me: playerId, ...(reveal ? { solution: room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ranking } : {}),
   };
 }
@@ -92,7 +93,7 @@ function broadcast(room: Room): void {
 }
 function finish(room: Room): void {
   if (room.phase !== 'playing') return;
-  room.phase = 'finished';
+    room.phase = 'finished';
   if (room.timer) clearTimeout(room.timer);
   for (const player of room.players.values()) if (player.status === 'playing') player.status = 'lost';
   broadcast(room);
@@ -101,7 +102,7 @@ function finish(room: Room): void {
 function removePlayerById(roomCode: string, playerId: string): void {
   const room = rooms.get(roomCode);
   if (!room) return;
-  const player = room.players.get(playerId);
+    const player = room.players.get(playerId)!;
   if (!player) return;
   if (player.disconnectTimer) clearTimeout(player.disconnectTimer);
   if (player.socketId) {
@@ -144,7 +145,7 @@ io.on('connection', (socket) => {
     const playerId = randomUUID();
     const resumeToken = randomBytes(32).toString('base64url');
     const room: Room = { code: roomCode, hostId: playerId, solution: '', solutions: [], players: new Map(), phase: 'lobby', gameMode, durationMinutes, endsAt: null };
-    const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: 'playing' };
+    const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: 'playing', wins: 0, returnedToLobby: false };
     room.players.set(player.id, player); rooms.set(roomCode, room); socketRoom.set(socket.id, roomCode); socket.join(roomCode);
     callback({ code: roomCode, playerId, resumeToken }); broadcast(room); broadcastRooms();
   });
@@ -159,7 +160,7 @@ io.on('connection', (socket) => {
     const joinedDuringRound = room.phase === 'playing';
     const playerId = randomUUID();
     const resumeToken = randomBytes(32).toString('base64url');
-    const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: joinedDuringRound ? 'waiting' : 'playing' };
+    const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: joinedDuringRound ? 'waiting' : 'playing', wins: 0, returnedToLobby: false };
     room.players.set(player.id, player); socketRoom.set(socket.id, room.code); socket.join(room.code);
     callback({ playerId, resumeToken }); broadcast(room); broadcastRooms();
   });
@@ -212,6 +213,7 @@ io.on('connection', (socket) => {
     for (const player of room.players.values()) {
       player.attempts = 0; player.guesses = []; player.elapsedMs = undefined;
       player.status = 'playing';
+      player.returnedToLobby = false;
     }
     const roundDurationMs = room.durationMinutes * 60 * 1000;
     room.phase = 'playing'; room.endsAt = Date.now() + roundDurationMs;
@@ -236,7 +238,7 @@ io.on('connection', (socket) => {
     player.guesses.push({ word: guess, result: firstResult, ...(room.gameMode !== 'TERMO' ? { results } : {}), revealedWord: WordService.getCanonicalWord(guess) ?? guess }); player.attempts++;
     const solvedNow = room.solutions.map((_, index) => solvedBefore[index] || results[index]?.every((tile) => tile === 'correct') === true);
     if (solvedNow.every(Boolean)) {
-      player.status = 'won'; player.elapsedMs = Date.now() - (room.endsAt! - room.durationMinutes * 60 * 1000);
+      player.status = 'won'; player.wins++; player.elapsedMs = Date.now() - (room.endsAt! - room.durationMinutes * 60 * 1000);
     } else if (player.attempts >= (room.gameMode === 'QUARTETO' ? 9 : room.gameMode === 'DUETO' ? 7 : 6)) player.status = 'lost';
     broadcast(room);
     const activePlayers = [...room.players.values()].filter((p) => p.status !== 'waiting');
@@ -254,10 +256,19 @@ io.on('connection', (socket) => {
   socket.on('room:return-lobby', () => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     const player = room && [...room.players.values()].find((candidate) => candidate.socketId === socket.id);
-    if (!room || !player || room.phase !== 'finished') return;
+    if (!room || !player || (room.phase !== 'finished' && !(room.phase === 'lobby' && player.id === room.hostId))) return;
+    if (player.id !== room.hostId) {
+      if (player.returnedToLobby) return;
+      player.returnedToLobby = true;
+      broadcast(room);
+      return;
+    }
     room.phase = 'lobby'; room.endsAt = null; room.solution = ''; room.solutions = [];
+    if (room.timer) clearTimeout(room.timer);
+    room.timer = undefined;
     for (const participant of room.players.values()) {
       participant.status = 'playing'; participant.attempts = 0; participant.guesses = []; participant.elapsedMs = undefined;
+      participant.returnedToLobby = false;
     }
     broadcast(room);
     broadcastRooms();

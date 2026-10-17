@@ -34,6 +34,8 @@
 :root[data-theme='dark'] .lobby-settings { background: #191f1b; border-color: #303832; }
 :root[data-theme='dark'] .room-settings-toggle { background: #252e27; border-color: #465148; color: #e0e9df; }
 :root[data-theme='dark'] .room-setting { color: #a4ada2; }
+:root[data-theme='dark'] .wins-row { border-color: #343d36; }
+:root[data-theme='dark'] .wins-row small { color: #aeb8ac; }
 :root[data-theme='dark'] .text-input::placeholder { color: #7f8a80; }
 :root[data-theme='dark'] .primary-button { background: #6c9877; color: #101a13; }
 :root[data-theme='dark'] .primary-button:hover { background: #83ad8c; }

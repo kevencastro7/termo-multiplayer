@@ -3,13 +3,13 @@ export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
-  isHost: boolean; rank?: number;
+  isHost: boolean; rank?: number; wins: number; returnedToLobby?: boolean;
   guessesUsed?: number; elapsedMs?: number;
 }
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
   gameMode: GameMode; durationMinutes: number;
-  guesses: GuessView[]; endsAt: number | null; remainingMs: number;
+  guesses: GuessView[]; endsAt: number | null; remainingMs: number; winsRanking: PublicPlayer[];
   solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;
 }
 export interface RoomSummary { code: string; playerCount: number; capacity: number; phase: RoomPhase; gameMode: GameMode; durationMinutes: number }
