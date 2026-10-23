@@ -96,6 +96,13 @@ function finish(room: Room): void {
     room.phase = 'finished';
   if (room.timer) clearTimeout(room.timer);
   for (const player of room.players.values()) if (player.status === 'playing') player.status = 'lost';
+  const winners = [...room.players.values()].filter((player) => player.status === 'won');
+  winners.sort((a, b) => a.attempts - b.attempts || (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity));
+  const topWinner = winners[0];
+  const tiedForFirst = topWinner && winners[1]
+    && topWinner.attempts === winners[1].attempts
+    && topWinner.elapsedMs === winners[1].elapsedMs;
+  if (topWinner && !tiedForFirst) topWinner.wins++;
   broadcast(room);
   broadcastRooms();
 }
@@ -238,11 +245,11 @@ io.on('connection', (socket) => {
     player.guesses.push({ word: guess, result: firstResult, ...(room.gameMode !== 'TERMO' ? { results } : {}), revealedWord: WordService.getCanonicalWord(guess) ?? guess }); player.attempts++;
     const solvedNow = room.solutions.map((_, index) => solvedBefore[index] || results[index]?.every((tile) => tile === 'correct') === true);
     if (solvedNow.every(Boolean)) {
-      player.status = 'won'; player.wins++; player.elapsedMs = Date.now() - (room.endsAt! - room.durationMinutes * 60 * 1000);
+      player.status = 'won'; player.elapsedMs = Date.now() - (room.endsAt! - room.durationMinutes * 60 * 1000);
     } else if (player.attempts >= (room.gameMode === 'QUARTETO' ? 9 : room.gameMode === 'DUETO' ? 7 : 6)) player.status = 'lost';
-    broadcast(room);
     const activePlayers = [...room.players.values()].filter((p) => p.status !== 'waiting');
     if (activePlayers.length > 0 && activePlayers.every((p) => p.status !== 'playing')) finish(room);
+    else broadcast(room);
   });
   socket.on('match:give-up', () => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
