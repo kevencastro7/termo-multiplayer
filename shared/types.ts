@@ -9,7 +9,7 @@ export interface PublicPlayer {
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
   gameMode: GameMode; durationMinutes: number; sequenceLength: number;
-  guesses: GuessView[]; endsAt: number | null; remainingMs: number; winsRanking: PublicPlayer[]; guessLimit: number;
+  guesses: GuessView[]; sequenceProgress?: Array<{ guesses: GuessView[]; attempts: number; solved: boolean }>; endsAt: number | null; remainingMs: number; winsRanking: PublicPlayer[]; guessLimit: number;
   solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;
 }
 export interface RoomSummary { code: string; playerCount: number; capacity: number; phase: RoomPhase; gameMode: GameMode; durationMinutes: number }
@@ -28,7 +28,7 @@ export interface ClientToServerEvents {
   'room:resume': (payload: { playerId: string; resumeToken: string }, callback: (result: { state?: MatchView; error?: string }) => void) => void;
   'match:start': () => void;
   'match:give-up': () => void;
-  'match:skip-word': () => void;
+  'match:select-word': (payload: { wordIndex: number }) => void;
   'room:return-lobby': () => void;
   'guess:submit': (payload: { word: string }) => void;
   'room:leave': () => void;
