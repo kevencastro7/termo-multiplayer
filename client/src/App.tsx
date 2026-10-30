@@ -46,7 +46,7 @@ export function App() {
   const [gameMode, setGameMode] = useState<GameMode>('TERMO');
   const [durationMinutes, setDurationMinutes] = useState(3);
   const [sequenceLength, setSequenceLength] = useState(3);
-  const modeDefaultDuration: Record<string, number> = { TERMO: 3, DUETO: 4, QUARTETO: 5, SEQUENCIA: 5 };
+  const modeDefaultDuration: Record<string, number> = { TERMO: 3, DUETO: 4, QUARTETO: 5, QUARTETO_SEQUENCIAL: 5, SEQUENCIA: 5 };
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [resuming, setResuming] = useState(Boolean(readRoomSession()));
   const sessionRef = useRef<RoomSession | null>(readRoomSession());
@@ -293,10 +293,23 @@ export function App() {
     catch { setNotice(`Compartilhe o código ${match.code}`); }
   };
 
-  const boardCount = match?.gameMode === 'QUARTETO' ? 4 : match?.gameMode === 'DUETO' ? 2 : 1;
+  const boardCount = match?.gameMode === 'QUARTETO' || match?.gameMode === 'QUARTETO_SEQUENCIAL' ? 4 : match?.gameMode === 'DUETO' ? 2 : 1;
+  const sequentialQuarteto = match?.gameMode === 'QUARTETO_SEQUENCIAL';
+  const quartetoRevealedBoards = sequentialQuarteto ? (match?.quartetoRevealedBoards ?? 1) : boardCount;
+  const quartetoActiveBoard = Math.min(quartetoRevealedBoards - 1, match?.players.find((player) => player.id === match.me)?.wordIndex ?? 0);
   const solvedBoards = Array.from({ length: boardCount }, (_, boardIndex) => boardCount > 1 && (match?.guesses ?? []).some((guess) => guess.results?.[boardIndex]?.every((tile) => tile === 'correct')));
-  const guessLimit = match?.guessLimit ?? (match?.gameMode === 'QUARTETO' ? 9 : match?.gameMode === 'DUETO' ? 7 : 6);
+  const activeBoardSolved = sequentialQuarteto && solvedBoards[quartetoActiveBoard];
+  const guessLimit = match?.guessLimit ?? (match?.gameMode === 'QUARTETO_SEQUENCIAL' ? 10 : match?.gameMode === 'QUARTETO' ? 9 : match?.gameMode === 'DUETO' ? 7 : 6);
   const keyStatuses = useMemo(() => {
+    if (match?.gameMode === 'QUARTETO_SEQUENCIAL') {
+      const map = new Map<string, TileStatus>();
+      for (const guess of match.guesses) for (const [index, letter] of [...guess.word].entries()) {
+        const status = guess.results?.[quartetoActiveBoard]?.[index];
+        const current = map.get(letter);
+        if (status && (!current || KEY_RANK[status] > KEY_RANK[current])) map.set(letter, status);
+      }
+      return map;
+    }
     if (match?.gameMode === 'DUETO' || match?.gameMode === 'QUARTETO') {
       const maps = Array.from({ length: boardCount }, () => new Map<string, TileStatus>());
       for (const guess of match.guesses) {
@@ -326,7 +339,7 @@ export function App() {
       });
     }
     return map;
-  }, [boardCount, match?.gameMode, match?.guesses, solvedBoards.join(',')]);
+  }, [boardCount, match?.gameMode, match?.guesses, quartetoActiveBoard, solvedBoards.join(',')]);
 
   const formattedTime = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
   const finished = match?.phase === 'finished';
@@ -335,7 +348,7 @@ export function App() {
   if (!match) return <main className="landing"><div className="landing-card landing-card-home">
     <div className="landing-brand-row"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span><span className={`connection-status ${connected ? 'is-connected' : ''}`}><i/>{connected ? 'CONECTADO' : 'CONECTANDO'}</span></div>{themeToggle}</div>
     <p className="eyebrow">PALAVRAS EM BOA COMPANHIA</p><h1>Uma palavra.<br/><span>Todo mundo junto.</span></h1>
-    <p className="intro">{gameMode === 'SEQUENCIA' ? `Resolva ${sequenceLength} palavras diferentes em sequência` : gameMode === 'QUARTETO' ? 'Descubra quatro palavras com até nove tentativas compartilhadas' : gameMode === 'DUETO' ? 'Descubra duas palavras com até sete tentativas compartilhadas' : 'Descubra a palavra secreta em até seis tentativas'} antes do tempo acabar.</p>
+    <p className="intro">{gameMode === 'SEQUENCIA' ? `Resolva ${sequenceLength} palavras diferentes em sequência` : gameMode === 'QUARTETO_SEQUENCIAL' ? 'Descubra quatro palavras reveladas uma por vez com até dez tentativas' : gameMode === 'QUARTETO' ? 'Descubra quatro palavras com até nove tentativas compartilhadas' : gameMode === 'DUETO' ? 'Descubra duas palavras com até sete tentativas compartilhadas' : 'Descubra a palavra secreta em até seis tentativas'} antes do tempo acabar.</p>
     <label className="field-label" htmlFor="player-name">COMO PODEMOS TE CHAMAR?</label>
     <input id="player-name" className="text-input" maxLength={18} placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
     <div className="landing-create-controls">
@@ -345,7 +358,7 @@ export function App() {
       </button>
     </div>
     {roomSettingsOpen && <section className="room-settings" id="room-settings" aria-label="Configurações da sala">
-      <label className="room-setting"><span>Modo de jogo</span><select value={gameMode} onChange={(event) => { const mode = event.target.value as GameMode; setGameMode(mode); setDurationMinutes(modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="SEQUENCIA">SEQUÊNCIA</option></select></label>
+      <label className="room-setting"><span>Modo de jogo</span><select value={gameMode} onChange={(event) => { const mode = event.target.value as GameMode; setGameMode(mode); setDurationMinutes(modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="QUARTETO_SEQUENCIAL">QUARTETO SEQUENCIAL</option><option value="SEQUENCIA">SEQUÊNCIA</option></select></label>
       <label className="room-setting"><span>Tempo da rodada</span><select value={durationMinutes} onChange={(event) => setDurationMinutes(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => index + 1).map((minutes) => <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>)}</select></label>
       {gameMode === 'SEQUENCIA' && <label className="room-setting sequence-setting"><span>Palavras na sequência</span><select value={sequenceLength} onChange={(event) => setSequenceLength(Number(event.target.value))}>{Array.from({ length: 9 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} palavras</option>)}</select></label>}
     </section>}
@@ -357,11 +370,11 @@ export function App() {
         const full = room.playerCount >= room.capacity;
         const status = room.phase === 'lobby' ? 'No lobby' : room.phase === 'playing' ? 'Em partida' : 'Rodada encerrada';
         return <button type="button" className="available-room" key={room.code} onClick={() => { setRoomCode(room.code); if (socket.connected) socket.timeout(5000).emit('room:join', { code: room.code, name: persistName() }, (timeoutError, result) => { if (timeoutError) setNotice('O servidor não respondeu. Tente novamente.'); else if (result.error) setNotice(result.error); else if (result.playerId && result.resumeToken) { const session = { code: room.code, playerId: result.playerId, resumeToken: result.resumeToken }; sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } }); else socket.connect(); }}>
-          <span className="available-room-code">{room.code}</span><span className="available-room-meta"><span>{room.gameMode} · {room.durationMinutes} {room.durationMinutes === 1 ? 'minuto' : 'minutos'}</span><span>{status} · {room.playerCount}/{room.capacity} jogadores</span></span><span className="available-room-action">{full ? 'Cheia' : 'Entrar ↗'}</span>
+          <span className="available-room-code">{room.code}</span><span className="available-room-meta"><span>{room.gameMode === 'QUARTETO_SEQUENCIAL' ? 'QUARTETO SEQUENCIAL' : room.gameMode} · {room.durationMinutes} {room.durationMinutes === 1 ? 'minuto' : 'minutos'}</span><span>{status} · {room.playerCount}/{room.capacity} jogadores</span></span><span className="available-room-action">{full ? 'Cheia' : 'Entrar ↗'}</span>
         </button>;
       })}</div>}
     </section>
-    <p className="landing-foot"><span>◷</span> {durationMinutes} {durationMinutes === 1 ? 'minuto' : 'minutos'} <i/> <span>⌁</span> Até 6 tentativas</p>
+    <p className="landing-foot"><span>◷</span> {durationMinutes} {durationMinutes === 1 ? 'minuto' : 'minutos'} <i/> <span>⌁</span> Até {gameMode === 'QUARTETO_SEQUENCIAL' ? 10 : gameMode === 'QUARTETO' ? 9 : gameMode === 'DUETO' ? 7 : 6} tentativas</p>
     {notice && <div className="toast" role="status">{notice}</div>}
   </div><div className="landing-stamp">FEITO PARA<br/>JOGAR JUNTO <span>✳</span></div></main>;
 
@@ -369,7 +382,7 @@ export function App() {
 
   if (match.phase === 'lobby') {
     const isHost = match.players.find((p) => p.id === match.me)?.isHost;
-    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><div className="lobby-settings">{isHost ? <><label className="room-setting"><span>Modo de jogo</span><select value={match.gameMode} onChange={(event) => { const mode = event.target.value as GameMode; updateRoomSettings(mode, modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="SEQUENCIA">SEQUÊNCIA</option></select></label><label className="room-setting"><span>Tempo da rodada</span><select value={match.durationMinutes} onChange={(event) => updateRoomSettings(match.gameMode, Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => { const minutes = index + 1; return <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>; })}</select></label>{match.gameMode === 'SEQUENCIA' && <label className="room-setting sequence-setting"><span>Tamanho da sequência</span><select value={match.sequenceLength} onChange={(event) => updateRoomSettings(match.gameMode, match.durationMinutes, Number(event.target.value))}>{Array.from({ length: 9 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} palavras</option>)}</select></label>}</> : <p><b>{match.gameMode === 'SEQUENCIA' ? 'SEQUÊNCIA' : match.gameMode}</b> · partidas de {match.durationMinutes} {match.durationMinutes === 1 ? 'minuto' : 'minutos'}</p>}</div><h2>Na sala <span>{match.players.length}</span></h2><div className="player-list">{match.players.map((p, i) => <div className="player-row" key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><span>{p.name}{p.id === match.me && <small> · você</small>}</span>{p.isHost && <span className="host-tag">ANFITRIÃO</span>}</div>)}</div>{winsLeaderboard}{isHost ? <button className="primary-button" onClick={() => socket.emit('match:start')}>Começar partida <span>↗</span></button> : <div className="waiting-note"><span className="live-dot"/> Aguardando o anfitrião…</div>}<p className="lobby-note">Até 12 jogadores · {match.gameMode === 'SEQUENCIA' ? `${match.sequenceLength} palavras · até ${guessLimit} tentativas por palavra` : `${guessLimit} tentativas`}</p></section>{notice && <div className="toast">{notice}</div>}</main>;
+    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><div className="lobby-settings">{isHost ? <><label className="room-setting"><span>Modo de jogo</span><select value={match.gameMode} onChange={(event) => { const mode = event.target.value as GameMode; updateRoomSettings(mode, modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="QUARTETO_SEQUENCIAL">QUARTETO SEQUENCIAL</option><option value="SEQUENCIA">SEQUÊNCIA</option></select></label><label className="room-setting"><span>Tempo da rodada</span><select value={match.durationMinutes} onChange={(event) => updateRoomSettings(match.gameMode, Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => { const minutes = index + 1; return <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>; })}</select></label>{match.gameMode === 'SEQUENCIA' && <label className="room-setting sequence-setting"><span>Tamanho da sequência</span><select value={match.sequenceLength} onChange={(event) => updateRoomSettings(match.gameMode, match.durationMinutes, Number(event.target.value))}>{Array.from({ length: 9 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} palavras</option>)}</select></label>}</> : <p><b>{match.gameMode === 'QUARTETO_SEQUENCIAL' ? 'QUARTETO SEQUENCIAL' : match.gameMode} · {match.durationMinutes} {match.durationMinutes === 1 ? 'minuto' : 'minutos'}</b><br/>Configurações definidas pelo anfitrião</p>}</div><div className="lobby-players"><p className="eyebrow">JOGADORES NA SALA</p>{match.players.map((player) => <div className="lobby-player" key={player.id}><span>{player.name}{player.id === match.me && <small> (você)</small>}</span>{player.isHost && <b>ANFITRIÃO</b>}</div>)}</div>{isHost && <button className="primary-button start-button" onClick={() => socket.emit('match:start')}>Começar rodada <span>↗</span></button>}</section>{notice && <div className="toast" role="status">{notice}</div>}</main>;
   }
 
   const me = match.players.find((p) => p.id === match.me);
@@ -383,18 +396,21 @@ export function App() {
   const canGuess = canPlay && (match.gameMode !== 'SEQUENCIA' || (!selectedWordState?.solved && (selectedWordState?.attempts ?? 0) < guessLimit));
     return <main className="game-page"><header className="topbar game-topbar"><button className="brand brand-button" onClick={leave}><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></button><div className={`timer ${remaining <= 30 ? 'timer-urgent' : ''}`}><span>◷</span>{formattedTime}</div><div className="topbar-actions">{themeToggle}{canPlay && <button type="button" className="quiet-button give-up-button" onClick={() => { if (window.confirm('Tem certeza de que deseja desistir desta partida?')) { setDraft(''); socket.emit('match:give-up'); } }}>Desistir</button>}</div></header>
     <div className={`game-layout ${finished ? 'game-layout-finished' : ''}`}><section className="board-column"><div className="match-heading"><span className="live-dot"/> SALA <b>{match.code}</b><span className="heading-sep">·</span> <span>{match.players.length} jogadores</span></div>
-      <div className={`boards ${boardCount === 2 ? 'boards-dueto' : boardCount === 4 ? 'boards-quarteto' : ''}`}>{Array.from({ length: boardCount }, (_, boardIndex) => <section className={`board-column ${solvedBoards[boardIndex] ? 'board-solved' : ''}`} key={boardIndex}>
+      <div className={`boards ${boardCount === 2 ? 'boards-dueto' : boardCount === 4 ? 'boards-quarteto' : ''} ${sequentialQuarteto ? 'boards-quarteto-sequential' : ''}`}>{Array.from({ length: boardCount }, (_, boardIndex) => {
+        const boardRevealed = !sequentialQuarteto || boardIndex < quartetoRevealedBoards || finished;
+        return <section className={`board-column ${solvedBoards[boardIndex] ? 'board-solved' : ''} ${!boardRevealed ? 'board-concealed' : ''}`} key={boardIndex}>
         {boardCount > 1 && <h2 className="dueto-board-label">PALAVRA {boardIndex + 1}{solvedBoards[boardIndex] && <span> ✓</span>}</h2>}
         {match.gameMode === 'SEQUENCIA' && <h2 className="dueto-board-label sequence-word-label">PALAVRA {selectedWord + 1} DE {match.sequenceLength}{selectedWordState?.solved ? ' ✓' : selectedWordState && selectedWordState.attempts >= guessLimit ? ' · ESGOTADA' : ''}</h2>}
-        <div className={`board-stage ${match.gameMode === 'SEQUENCIA' ? 'board-stage-sequence' : ''}`}>
+        {sequentialQuarteto && !boardRevealed && <div className="board board-hidden" aria-label={`Palavra ${boardIndex + 1} ainda não revelada`}>{Array.from({ length: guessLimit }, (_, row) => <div className="board-row" key={row}>{Array.from({ length: 5 }, (_, col) => <span className="tile tile-concealed" key={col}/>)}</div>)}</div>}
+        {boardRevealed && <div className={`board-stage ${match.gameMode === 'SEQUENCIA' ? 'board-stage-sequence' : ''}`}>
         {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-previous" aria-label="Palavra anterior" disabled={selectedWord === 0} onClick={() => selectSequenceWord(selectedWord - 1)}>←</button>}
         <div className="board" role="group" aria-label={`Tabuleiro ${boardIndex + 1}, até ${guessLimit} tentativas`}>{Array.from({ length: guessLimit }, (_, row) => {
           const visibleGuesses = match.gameMode === 'SEQUENCIA' ? (match.sequenceProgress?.[selectedWord]?.guesses ?? []) : match.guesses;
           const guess = visibleGuesses[row];
           const results = guess ? (guess.results ?? [guess.result]) : undefined;
-          const result = results?.[boardIndex];
+          const result = sequentialQuarteto && boardRevealed ? guess?.results?.[boardIndex] : results?.[boardIndex];
           const boardSolvedAtRow = !!result?.every((tile) => tile === 'correct');
-          const activeRow = !guess && canGuess && !solvedBoards[boardIndex] && row === visibleGuesses.length;
+          const activeRow = !guess && canGuess && (sequentialQuarteto ? boardIndex === quartetoActiveBoard && !activeBoardSolved : !solvedBoards[boardIndex]) && boardRevealed && row === visibleGuesses.length;
           const revealedGuess = guess?.revealedWord ?? guess?.word;
           const letters = guess && result ? [...(revealedGuess ?? guess.word)] : activeRow ? [...draft.padEnd(5, ' ')] : [];
           return <div className={`board-row ${activeRow ? 'active-row' : ''} ${boardSolvedAtRow ? 'board-row-solved' : ''}`} key={row}>{Array.from({ length: 5 }, (_, col) => {
@@ -404,10 +420,15 @@ export function App() {
           })}</div>;
         })}</div>
         {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-next" aria-label="Próxima palavra" disabled={selectedWord >= match.sequenceLength - 1} onClick={() => selectSequenceWord(selectedWord + 1)}>→</button>}
-        </div>
-      </section>)}</div>
-      {canGuess ? <section className={`keyboard ${match.gameMode === 'DUETO' ? 'keyboard-dueto' : match.gameMode === 'QUARTETO' ? 'keyboard-quarteto' : ''}`} aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => {
-        if (match.gameMode === 'DUETO' || match.gameMode === 'QUARTETO') {
+        </div>}
+      </section>;
+      })}</div>
+      {canGuess ? <section className={`keyboard ${match.gameMode === 'DUETO' ? 'keyboard-dueto' : boardCount === 4 ? 'keyboard-quarteto' : ''}`} aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => {
+        if (sequentialQuarteto) {
+          const status = (keyStatuses as Map<string, TileStatus>).get(letter);
+          return <button key={letter} className={`key ${status ? `key-${status}` : ''}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>;
+        }
+        if (match.gameMode === 'DUETO' || match.gameMode === 'QUARTETO' || sequentialQuarteto) {
           const statuses = keyStatuses as Map<string, TileStatus>[];
           const segmentClasses = statuses.map((map, boardIndex) => {
             const status = map.get(letter);
@@ -420,7 +441,7 @@ export function App() {
         const status = (keyStatuses as Map<string, TileStatus>).get(letter);
         return <button key={letter} className={`key ${status ? `key-${status}` : ''}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>;
       })}{ri === 1 && <button className="key key-action key-delete" aria-label="Apagar" onClick={() => { vibrateForVirtualKey(); backspace(); }}>⌫</button>}{ri === 2 && <button className="key key-action" onClick={() => { vibrateForVirtualKey(); submitGuess(); }}>↵</button>}</div>)}</section> : <div className="board-spacer"/>}
-      <div className="board-caption">{match.gameMode === 'SEQUENCIA' && !finished ? `${me?.wordsSolved ?? 0} DE ${match.sequenceLength} PALAVRAS RESOLVIDAS${selectedWordState?.solved ? ' · ESTA PALAVRA JÁ FOI RESOLVIDA' : (selectedWordState?.attempts ?? 0) >= guessLimit ? ' · LIMITE DE TENTATIVAS ATINGIDO' : ''}` : finished ? `A palavra era ${match.solutions?.join(' · ') ?? match.solution}` : canPlay ? boardCount > 1 && solvedBoards.some(Boolean) ? 'PALAVRAS RESOLVIDAS FICAM BLOQUEADAS — CONTINUE NAS OUTRAS' : 'TOQUE EM UMA CASA PARA ESCOLHER ONDE DIGITAR' : 'SUA PARTIDA FOI CONCLUÍDA'}</div>
+      <div className="board-caption">{sequentialQuarteto && !finished ? `${quartetoRevealedBoards} DE 4 PALAVRAS REVELADAS${solvedBoards[quartetoActiveBoard] ? ' · ESTA PALAVRA JÁ FOI RESOLVIDA' : ''}` : match.gameMode === 'SEQUENCIA' && !finished ? `${me?.wordsSolved ?? 0} DE ${match.sequenceLength} PALAVRAS RESOLVIDAS${selectedWordState?.solved ? ' · ESTA PALAVRA JÁ FOI RESOLVIDA' : (selectedWordState?.attempts ?? 0) >= guessLimit ? ' · LIMITE DE TENTATIVAS ATINGIDO' : ''}` : finished ? `A palavra era ${match.solutions?.join(' · ') ?? match.solution}` : canPlay ? boardCount > 1 && solvedBoards.some(Boolean) ? 'PALAVRAS RESOLVIDAS FICAM BLOQUEADAS — CONTINUE NAS OUTRAS' : 'TOQUE EM UMA CASA PARA ESCOLHER ONDE DIGITAR' : 'SUA PARTIDA FOI CONCLUÍDA'}</div>
     </section><aside className={`players-panel ${finished ? 'results-panel' : ''}`}>
       {finished ? <>
         {winner ? <div className="winner-celebration"><span className="fireworks" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/></span><span className="winner-trophy" aria-hidden="true">🏆</span><p className="eyebrow">CAMPEÃO DA RODADA</p><h1>{winner.name}</h1><p className="winner-score">{match.gameMode === 'SEQUENCIA' ? `${winner.wordsSolved ?? 0} palavras · ${((winner.elapsedMs ?? 0) / 1000).toFixed(1)}s` : `${winner.guessesUsed ?? winner.attempts} ${(winner.guessesUsed ?? winner.attempts) === 1 ? 'tentativa' : 'tentativas'} · ${((winner.elapsedMs ?? 0) / 1000).toFixed(1)}s`}</p></div> : <div className="winner-celebration no-winner"><p className="eyebrow">FIM DE JOGO</p><h1>Ninguém descobriu</h1></div>}

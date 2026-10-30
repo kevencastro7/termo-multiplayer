@@ -1,5 +1,5 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
-export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'SEQUENCIA' | (string & {});
+export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'QUARTETO_SEQUENCIAL' | 'SEQUENCIA' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
@@ -9,6 +9,7 @@ export interface PublicPlayer {
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
   gameMode: GameMode; durationMinutes: number; sequenceLength: number;
+  quartetoRevealedBoards?: number;
   guesses: GuessView[]; sequenceProgress?: Array<{ guesses: GuessView[]; attempts: number; solved: boolean }>; endsAt: number | null; remainingMs: number; winsRanking: PublicPlayer[]; guessLimit: number;
   solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;
 }
