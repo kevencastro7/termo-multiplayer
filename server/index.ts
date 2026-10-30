@@ -281,10 +281,13 @@ io.on('connection', (socket) => {
       progress.solved = solvedWord;
       player.guesses = progress.guesses;
       player.wordsSolved = player.sequenceProgress.filter((entry) => entry.solved).length;
-      if (player.wordsSolved === room.sequenceLength) {
+      const sequenceFinished = player.wordsSolved === room.sequenceLength;
+      if (sequenceFinished) {
         player.status = 'won';
         player.sequenceElapsedMs = Date.now() - (player.sequenceStartedAt ?? Date.now());
         player.elapsedMs = player.sequenceElapsedMs;
+      } else if (player.sequenceProgress.every((entry) => entry.solved || entry.attempts >= guessLimitFor(room.gameMode))) {
+        player.status = 'lost';
       }
     } else if (solvedNow.every(Boolean)) {
       player.status = 'won'; player.elapsedMs = Date.now() - (room.endsAt! - room.durationMinutes * 60 * 1000);
@@ -307,7 +310,7 @@ io.on('connection', (socket) => {
   socket.on('match:select-word', ({ wordIndex }) => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     const player = room && [...room.players.values()].find((candidate) => candidate.socketId === socket.id);
-    if (!room || room.phase !== 'playing' || room.gameMode !== 'SEQUENCIA' || !player || player.status !== 'playing') return;
+    if (!room || room.phase !== 'playing' || room.gameMode !== 'SEQUENCIA' || !player || (player.status !== 'playing' && player.status !== 'won' && player.status !== 'lost')) return;
     if (!Number.isInteger(wordIndex) || wordIndex < 0 || wordIndex >= room.sequenceLength) return;
     player.wordIndex = wordIndex;
     player.currentSolution = room.solutions[wordIndex];

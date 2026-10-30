@@ -65,10 +65,25 @@ export function App() {
 
   useEffect(() => {
     const onState = (state: MatchView) => {
-      const previousPhase = matchRef.current?.phase;
+      const previousState = matchRef.current;
+      const previousPhase = previousState?.phase;
       if (previousPhase === 'lobby' && state.phase === 'playing' && 'vibrate' in navigator) navigator.vibrate([80, 40, 120]);
-      if ((previousPhase === 'playing' && state.phase === 'finished') || (previousPhase === 'playing' && state.phase === 'playing' && state.gameMode === 'SEQUENCIA' && state.me === matchRef.current?.me && (state.players.find((player) => player.id === state.me)?.wordIndex !== matchRef.current?.players.find((player) => player.id === state.me)?.wordIndex || state.guesses.length === 0 && (matchRef.current?.guesses.length ?? 0) > 0))) {
+      const previousMe = previousState?.players.find((player) => player.id === state.me);
+      const currentMe = state.players.find((player) => player.id === state.me);
+      const previousWordIndex = previousMe?.wordIndex ?? 0;
+      const previousWord = previousState?.sequenceProgress?.[previousWordIndex];
+      const currentWord = state.sequenceProgress?.[previousWordIndex];
+      const justFinishedWord = state.phase === 'playing' && state.gameMode === 'SEQUENCIA' && previousMe?.status === 'playing' && (currentWord?.solved || (currentWord?.attempts ?? 0) >= state.guessLimit) && (currentWord?.attempts ?? 0) > (previousWord?.attempts ?? 0);
+      if ((previousPhase === 'playing' && state.phase === 'finished') || (previousPhase === 'playing' && state.phase === 'playing' && state.gameMode === 'SEQUENCIA' && state.me === previousState?.me && (currentMe?.wordIndex !== previousMe?.wordIndex || state.guesses.length === 0 && (previousState?.guesses.length ?? 0) > 0))) {
         setDraft(''); draftRef.current = ''; setActiveTile(0);
+      }
+      if (justFinishedWord && currentMe) {
+        const nextAvailable = Array.from({ length: state.sequenceLength }, (_, offset) => previousWordIndex + 1 + offset)
+          .find((index) => index < state.sequenceLength && !state.sequenceProgress?.[index]?.solved && (state.sequenceProgress?.[index]?.attempts ?? 0) < state.guessLimit);
+        const previousAvailable = Array.from({ length: previousWordIndex }, (_, offset) => previousWordIndex - 1 - offset)
+          .find((index) => !state.sequenceProgress?.[index]?.solved && (state.sequenceProgress?.[index]?.attempts ?? 0) < state.guessLimit);
+        const availableWord = nextAvailable ?? previousAvailable;
+        if (availableWord !== undefined) socket.emit('match:select-word', { wordIndex: availableWord });
       }
       matchRef.current = state;
       setMatch(state); setResuming(false); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice('');
@@ -241,7 +256,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || !match || match.phase !== 'playing') return;
+      if (event.metaKey || event.ctrlKey || event.altKey || !match || match.phase !== 'playing' || match.players.find((player) => player.id === match.me)?.status !== 'playing') return;
       if (/^[a-zA-ZÀ-ÖØ-öø-ÿ]$/u.test(event.key)) { event.preventDefault(); setLetter(event.key); }
       else if (event.key === 'Backspace') { event.preventDefault(); backspace(); }
       else if (event.key === 'Enter') { event.preventDefault(); submitGuess(); }
@@ -347,6 +362,7 @@ export function App() {
   if (waitingNextRound) return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card waiting-card"><div className="lobby-icon">◷</div><p className="eyebrow">AGUARDANDO O ANFITRIÃO</p><h1>Você voltou!</h1><p className="intro">A rodada terminou. Você está no lobby; a próxima partida começará quando o anfitrião retornar.</p><div className="waiting-room-code">SALA <b>{match.code}</b></div><div className="waiting-note"><span className="live-dot"/> Aguardando o anfitrião…</div>{winsLeaderboard}</section>{notice && <div className="toast" role="status">{notice}</div>}</main>;
     const selectedWord = me?.wordIndex ?? 0;
   const selectedWordState = match.sequenceProgress?.[selectedWord];
+  const canNavigateSequence = match.gameMode === 'SEQUENCIA' && match.phase === 'playing' && !waitingNextRound && (canPlay || me?.status === 'won' || me?.status === 'lost');
   const canGuess = canPlay && (match.gameMode !== 'SEQUENCIA' || (!selectedWordState?.solved && (selectedWordState?.attempts ?? 0) < guessLimit));
     return <main className="game-page"><header className="topbar game-topbar"><button className="brand brand-button" onClick={leave}><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></button><div className={`timer ${remaining <= 30 ? 'timer-urgent' : ''}`}><span>◷</span>{formattedTime}</div><div className="topbar-actions">{themeToggle}{canPlay && <button type="button" className="quiet-button give-up-button" onClick={() => { if (window.confirm('Tem certeza de que deseja desistir desta partida?')) { setDraft(''); socket.emit('match:give-up'); } }}>Desistir</button>}</div></header>
     <div className={`game-layout ${finished ? 'game-layout-finished' : ''}`}><section className="board-column"><div className="match-heading"><span className="live-dot"/> SALA <b>{match.code}</b><span className="heading-sep">·</span> <span>{match.players.length} jogadores</span></div>
@@ -354,7 +370,7 @@ export function App() {
         {boardCount > 1 && <h2 className="dueto-board-label">PALAVRA {boardIndex + 1}{solvedBoards[boardIndex] && <span> ✓</span>}</h2>}
         {match.gameMode === 'SEQUENCIA' && <h2 className="dueto-board-label sequence-word-label">PALAVRA {selectedWord + 1} DE {match.sequenceLength}{selectedWordState?.solved ? ' ✓' : selectedWordState && selectedWordState.attempts >= guessLimit ? ' · ESGOTADA' : ''}</h2>}
         <div className={`board-stage ${match.gameMode === 'SEQUENCIA' ? 'board-stage-sequence' : ''}`}>
-        {match.gameMode === 'SEQUENCIA' && <button type="button" className="quiet-button sequence-arrow sequence-arrow-previous" aria-label="Palavra anterior" disabled={selectedWord === 0} onClick={() => selectSequenceWord(selectedWord - 1)}>←</button>}
+        {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-previous" aria-label="Palavra anterior" disabled={selectedWord === 0} onClick={() => selectSequenceWord(selectedWord - 1)}>←</button>}
         <div className="board" role="group" aria-label={`Tabuleiro ${boardIndex + 1}, até ${guessLimit} tentativas`}>{Array.from({ length: guessLimit }, (_, row) => {
           const visibleGuesses = match.gameMode === 'SEQUENCIA' ? (match.sequenceProgress?.[selectedWord]?.guesses ?? []) : match.guesses;
           const guess = visibleGuesses[row];
@@ -370,7 +386,7 @@ export function App() {
             return <button type="button" aria-label={`Palavra ${boardIndex + 1}, tentativa ${row + 1}, letra ${col + 1}${letter ? `: ${letter}` : ', vazia'}`} aria-pressed={!!isActive} className={`tile ${status ? `tile-${status}` : ''} ${letter && !status ? 'tile-filled' : ''} ${isActive ? 'tile-selected' : ''}`} key={col} onClick={() => { if (activeRow) setActiveTile(col); }}>{letter}</button>;
           })}</div>;
         })}</div>
-        {match.gameMode === 'SEQUENCIA' && <button type="button" className="quiet-button sequence-arrow sequence-arrow-next" aria-label="Próxima palavra" disabled={selectedWord >= match.sequenceLength - 1} onClick={() => selectSequenceWord(selectedWord + 1)}>→</button>}
+        {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-next" aria-label="Próxima palavra" disabled={selectedWord >= match.sequenceLength - 1} onClick={() => selectSequenceWord(selectedWord + 1)}>→</button>}
         </div>
       </section>)}</div>
       {canGuess ? <section className={`keyboard ${match.gameMode === 'DUETO' ? 'keyboard-dueto' : match.gameMode === 'QUARTETO' ? 'keyboard-quarteto' : ''}`} aria-label="Teclado virtual">{LETTER_ROWS.map((row, ri) => <div className="key-row" key={row}>{[...row].map((letter) => {
