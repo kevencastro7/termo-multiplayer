@@ -33,6 +33,12 @@ export function App() {
   const [draft, setDraft] = useState('');
   const [activeTile, setActiveTile] = useState(0);
   const [notice, setNotice] = useState('');
+  const noticeTimerRef = useRef<number | null>(null);
+  const showNotice = useCallback((message: string) => {
+    setNotice(message);
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => { setNotice(''); noticeTimerRef.current = null; }, 2800);
+  }, []);
   const [remaining, setRemaining] = useState(180);
   const [copied, setCopied] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
@@ -86,10 +92,10 @@ export function App() {
         if (availableWord !== undefined) socket.emit('match:select-word', { wordIndex: availableWord });
       }
       matchRef.current = state;
-      setMatch(state); setResuming(false); setRemaining(Math.ceil(state.remainingMs / 1000)); setNotice('');
+      setMatch(state); setResuming(false); setRemaining(Math.ceil(state.remainingMs / 1000));
     };
     const onRoomsState = (availableRooms: RoomSummary[]) => setRooms(availableRooms);
-    const onError = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 2800); };
+    const onError = (message: string) => showNotice(message);
     const resumeRoom = () => {
       const session = sessionRef.current;
       if (!session || !socket.connected || resumeInFlight.current) return;
@@ -126,6 +132,14 @@ export function App() {
         }
       });
     };
+    const onGuessRejected = (message: string) => {
+      showNotice(message);
+      if (message === 'Você já tentou essa palavra. Escolha outra.') {
+        draftRef.current = '';
+        setDraft('');
+        setActiveTile(0);
+      }
+    };
     const onConnect = () => { setConnected(true); if (sessionRef.current) resumeRoom(); else setNotice(''); };
     const onDisconnect = (reason: string) => {
       setConnected(false);
@@ -134,7 +148,7 @@ export function App() {
     };
     const onConnectError = () => { setConnected(false); };
     const requestRooms = () => { if (socket.connected) socket.emit('rooms:list', setRooms); };
-    socket.on('match:state', onState); socket.on('match:error', onError); socket.on('match:notice', onError); socket.on('rooms:state', onRoomsState);
+    socket.on('match:state', onState); socket.on('match:error', onGuessRejected); socket.on('match:notice', onError); socket.on('rooms:state', onRoomsState);
     socket.on('connect', requestRooms);
     const onVisibility = () => { if (document.visibilityState === 'visible' && !socket.connected) socket.connect(); else if (document.visibilityState === 'visible') resumeRoom(); };
     socket.on('connect', onConnect); socket.on('disconnect', onDisconnect); socket.on('connect_error', onConnectError);
@@ -142,8 +156,8 @@ export function App() {
     setConnected(socket.connected);
     if (socket.connected) { resumeRoom(); requestRooms(); }
     else socket.connect();
-    return () => { document.removeEventListener('visibilitychange', onVisibility); socket.off('rooms:state', onRoomsState); socket.off('connect', requestRooms); socket.off('match:state', onState); socket.off('match:error', onError); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
-  }, [socket]);
+    return () => { document.removeEventListener('visibilitychange', onVisibility); socket.off('rooms:state', onRoomsState); socket.off('connect', requestRooms); socket.off('match:state', onState); socket.off('match:error', onGuessRejected); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
+  }, [showNotice, socket]);
 
   useEffect(() => {
     if (!match || match.phase !== 'playing' || !match.endsAt) return;
@@ -244,6 +258,9 @@ export function App() {
     socket.emit('guess:submit', { word: draftRef.current }); setDraft(''); draftRef.current = ''; setActiveTile(0);
   }, [match, socket]);
 
+  const submitGuessRef = useRef(submitGuess);
+  submitGuessRef.current = submitGuess;
+
   const selectSequenceWord = (wordIndex: number) => {
     if (!match || !me || wordIndex < 0 || wordIndex >= match.sequenceLength) return;
     setDraft(''); draftRef.current = ''; setActiveTile(0);
@@ -259,10 +276,10 @@ export function App() {
       if (event.metaKey || event.ctrlKey || event.altKey || !match || match.phase !== 'playing' || match.players.find((player) => player.id === match.me)?.status !== 'playing') return;
       if (/^[a-zA-ZÀ-ÖØ-öø-ÿ]$/u.test(event.key)) { event.preventDefault(); setLetter(event.key); }
       else if (event.key === 'Backspace') { event.preventDefault(); backspace(); }
-      else if (event.key === 'Enter') { event.preventDefault(); submitGuess(); }
+      else if (event.key === 'Enter') { event.preventDefault(); submitGuessRef.current(); }
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
-  }, [backspace, match, setLetter, submitGuess]);
+  }, [backspace, match, setLetter]);
 
   const leave = () => { socket.emit('room:leave'); sessionRef.current = null; localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); setResuming(false); setMatch(null); setDraft(''); setRoomCode(''); window.history.replaceState(null, '', '/'); };
   const returnToLobby = () => { setDraft(''); setActiveTile(0); socket.emit('room:return-lobby'); };

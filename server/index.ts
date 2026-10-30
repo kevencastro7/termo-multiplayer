@@ -263,6 +263,13 @@ io.on('connection', (socket) => {
     const guess = word.trim().toLocaleUpperCase('pt-BR');
     if (!WordService.isValidFormat(guess)) return socket.emit('match:error', 'A palavra precisa ter 5 letras.');
     if (!WordService.isValidGuess(guess)) return socket.emit('match:error', 'Essa palavra não está no nosso dicionário.');
+    const normalizedGuess = WordService.normalizeWord(guess);
+    const previousGuesses = room.gameMode === 'SEQUENCIA'
+      ? player.sequenceProgress[player.wordIndex].guesses
+      : player.guesses;
+    if (previousGuesses.some((pastGuess) => WordService.normalizeWord(pastGuess.word) === normalizedGuess)) {
+      return socket.emit('match:error', 'Você já tentou essa palavra. Escolha outra.');
+    }
     const activeSolutions = room.gameMode === 'SEQUENCIA' ? [player.currentSolution ?? room.solution] : room.solutions;
     const currentWordGuesses = room.gameMode === 'SEQUENCIA' ? player.sequenceProgress[player.wordIndex].guesses : player.guesses;
     const solvedBefore = activeSolutions.map((solution) => currentWordGuesses.some((pastGuess) => {
