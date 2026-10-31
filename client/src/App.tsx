@@ -403,7 +403,7 @@ export function App() {
         {match.gameMode === 'SEQUENCIA' && <h2 className="dueto-board-label sequence-word-label">PALAVRA {selectedWord + 1} DE {match.sequenceLength}{selectedWordState?.solved ? ' ✓' : selectedWordState && selectedWordState.attempts >= guessLimit ? ' · ESGOTADA' : ''}</h2>}
         {sequentialQuarteto && !boardRevealed && <div className="board board-hidden" aria-label={`Palavra ${boardIndex + 1} ainda não revelada`}>{Array.from({ length: guessLimit }, (_, row) => <div className="board-row" key={row}>{Array.from({ length: 5 }, (_, col) => <span className="tile tile-concealed" key={col}/>)}</div>)}</div>}
         {boardRevealed && <div className={`board-stage ${match.gameMode === 'SEQUENCIA' ? 'board-stage-sequence' : ''}`}>
-        {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-previous" aria-label="Palavra anterior" disabled={selectedWord === 0} onClick={() => selectSequenceWord(selectedWord - 1)}>←</button>}
+        {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-previous" aria-label="Palavra anterior" disabled={selectedWord === 0} onClick={() => selectSequenceWord(selectedWord - 1)}><span aria-hidden="true">→</span></button>}
         <div className="board" role="group" aria-label={`Tabuleiro ${boardIndex + 1}, até ${guessLimit} tentativas`}>{Array.from({ length: guessLimit }, (_, row) => {
           const visibleGuesses = match.gameMode === 'SEQUENCIA' ? (match.sequenceProgress?.[selectedWord]?.guesses ?? []) : match.guesses;
           const guess = visibleGuesses[row];
@@ -419,7 +419,7 @@ export function App() {
             return <button type="button" aria-label={`Palavra ${boardIndex + 1}, tentativa ${row + 1}, letra ${col + 1}${letter ? `: ${letter}` : ', vazia'}`} aria-pressed={!!isActive} className={`tile ${status ? `tile-${status}` : ''} ${letter && !status ? 'tile-filled' : ''} ${isActive ? 'tile-selected' : ''}`} key={col} onClick={() => { if (activeRow) setActiveTile(col); }}>{letter}</button>;
           })}</div>;
         })}</div>
-        {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-next" aria-label="Próxima palavra" disabled={selectedWord >= match.sequenceLength - 1} onClick={() => selectSequenceWord(selectedWord + 1)}>→</button>}
+        {canNavigateSequence && <button type="button" className="key sequence-arrow sequence-arrow-next" aria-label="Próxima palavra" disabled={selectedWord >= match.sequenceLength - 1} onClick={() => selectSequenceWord(selectedWord + 1)}><span aria-hidden="true">→</span></button>}
         </div>}
       </section>;
       })}</div>
