@@ -89,7 +89,7 @@ function state(room: Room, playerId: string): MatchView {
   return {
     code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, sequenceLength: room.sequenceLength, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
     players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
-    guesses: player.guesses.map((g) => room.gameMode === 'QUARTETO_SEQUENCIAL' && !reveal ? { ...g, results: room.solutions.map((solution, index) => index <= player.quartetoWordIndex ? WordService.score(g.word, solution) : null), result: WordService.score(g.word, room.solutions[player.quartetoWordIndex]) } : { ...g }), ...(room.gameMode === 'SEQUENCIA' ? { sequenceProgress: player.sequenceProgress.map((word) => ({ guesses: word.guesses.map((guess) => ({ ...guess })), attempts: word.attempts, solved: word.solved })) } : {}), endsAt: room.endsAt,
+    guesses: player.guesses.map((g) => ({ ...g, results: g.results?.map((result) => result ? [...result] : null) })), ...(room.gameMode === 'SEQUENCIA' ? { sequenceProgress: player.sequenceProgress.map((word) => ({ guesses: word.guesses.map((guess) => ({ ...guess })), attempts: word.attempts, solved: word.solved })) } : {}), endsAt: room.endsAt,
     remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.durationMinutes * 60 * 1000, winsRanking,
     me: playerId, ...(reveal ? { solution: room.gameMode === 'SEQUENCIA' ? room.solutions.at(-1) : room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ranking } : {}),
   };
@@ -276,7 +276,7 @@ io.on('connection', (socket) => {
     const solvedBefore = activeSolutions.map((solution) => currentWordGuesses.some((pastGuess) =>
       WordService.normalizeWord(pastGuess.word) === WordService.normalizeWord(solution)));
     const results = room.gameMode === 'QUARTETO_SEQUENCIAL'
-      ? room.solutions.map((solution, index) => index <= player.quartetoWordIndex ? WordService.score(guess, solution) : null)
+      ? room.solutions.map((solution, index) => index === player.quartetoWordIndex ? WordService.score(guess, solution) : null)
       : activeSolutions.map((solution, index) => solvedBefore[index] ? null : WordService.score(guess, solution));
     const firstResult = results.find((result): result is TileStatus[] => result !== null) ?? WordService.score(guess, activeSolutions[0]);
     player.guesses.push({ word: guess, result: firstResult, ...((room.gameMode === 'DUETO' || room.gameMode === 'QUARTETO' || room.gameMode === 'QUARTETO_SEQUENCIAL') ? { results } : {}), revealedWord: WordService.getCanonicalWord(guess) ?? guess }); player.attempts++;
@@ -302,6 +302,12 @@ io.on('connection', (socket) => {
       while (player.quartetoWordIndex < room.solutions.length && matchesSolution(room.solutions[player.quartetoWordIndex])) player.quartetoWordIndex++;
       player.quartetoWordIndex = Math.min(player.quartetoWordIndex, room.solutions.length - 1);
       player.wordIndex = player.quartetoWordIndex;
+      for (const pastGuess of player.guesses) {
+        pastGuess.results ??= Array<TileStatus[] | null>(room.solutions.length).fill(null);
+        if (pastGuess.results[player.quartetoWordIndex] == null) {
+          pastGuess.results[player.quartetoWordIndex] = WordService.score(pastGuess.word, room.solutions[player.quartetoWordIndex]);
+        }
+      }
       if (room.solutions.every(matchesSolution)) {
         player.status = 'won'; player.elapsedMs = Date.now() - (room.endsAt! - room.durationMinutes * 60 * 1000);
       } else if (player.attempts >= guessLimitFor(room.gameMode)) player.status = 'lost';
