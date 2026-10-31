@@ -46,7 +46,7 @@ function publicPlayer(player: Player, reveal = false, roundStartedAt?: number): 
     isHost: false,
     ...(player.status === 'won' || (reveal && player.status !== 'playing') ? { guessesUsed: player.attempts, elapsedMs: player.elapsedMs ?? (roundStartedAt ? Date.now() - roundStartedAt : undefined) } : {}) };
 }
-function guessLimitFor(mode: GameMode): number { return mode === 'QUARTETO_SEQUENCIAL' ? 10 : mode === 'QUARTETO' ? 9 : mode === 'DUETO' ? 7 : 6; }
+function guessLimitFor(mode: GameMode): number { return mode === 'QUARTETO_SEQUENCIAL' ? 12 : mode === 'QUARTETO' ? 9 : mode === 'DUETO' ? 7 : 6; }
 function solvedBoardCount(player: Player, boardCount: number): number {
   return Array.from({ length: boardCount }, (_, boardIndex) => player.guesses.some((guess) => {
     const results = guess.results ?? [guess.result];

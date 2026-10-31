@@ -299,7 +299,7 @@ export function App() {
   const quartetoActiveBoard = Math.min(quartetoRevealedBoards - 1, match?.players.find((player) => player.id === match.me)?.wordIndex ?? 0);
   const solvedBoards = Array.from({ length: boardCount }, (_, boardIndex) => boardCount > 1 && (match?.guesses ?? []).some((guess) => guess.results?.[boardIndex]?.every((tile) => tile === 'correct')));
   const activeBoardSolved = sequentialQuarteto && solvedBoards[quartetoActiveBoard];
-  const guessLimit = match?.guessLimit ?? (match?.gameMode === 'QUARTETO_SEQUENCIAL' ? 10 : match?.gameMode === 'QUARTETO' ? 9 : match?.gameMode === 'DUETO' ? 7 : 6);
+  const guessLimit = match?.guessLimit ?? (match?.gameMode === 'QUARTETO_SEQUENCIAL' ? 12 : match?.gameMode === 'QUARTETO' ? 9 : match?.gameMode === 'DUETO' ? 7 : 6);
   const keyStatuses = useMemo(() => {
     if (match?.gameMode === 'QUARTETO_SEQUENCIAL') {
       const map = new Map<string, TileStatus>();
@@ -348,7 +348,7 @@ export function App() {
   if (!match) return <main className="landing"><div className="landing-card landing-card-home">
     <div className="landing-brand-row"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span><span className={`connection-status ${connected ? 'is-connected' : ''}`}><i/>{connected ? 'CONECTADO' : 'CONECTANDO'}</span></div>{themeToggle}</div>
     <p className="eyebrow">PALAVRAS EM BOA COMPANHIA</p><h1>Uma palavra.<br/><span>Todo mundo junto.</span></h1>
-    <p className="intro">{gameMode === 'SEQUENCIA' ? `Resolva ${sequenceLength} palavras diferentes em sequência` : gameMode === 'QUARTETO_SEQUENCIAL' ? 'Descubra quatro palavras reveladas uma por vez com até dez tentativas' : gameMode === 'QUARTETO' ? 'Descubra quatro palavras com até nove tentativas compartilhadas' : gameMode === 'DUETO' ? 'Descubra duas palavras com até sete tentativas compartilhadas' : 'Descubra a palavra secreta em até seis tentativas'} antes do tempo acabar.</p>
+    <p className="intro">{gameMode === 'SEQUENCIA' ? `Resolva ${sequenceLength} palavras diferentes em sequência` : gameMode === 'QUARTETO_SEQUENCIAL' ? 'Descubra quatro palavras reveladas uma por vez com até doze tentativas' : gameMode === 'QUARTETO' ? 'Descubra quatro palavras com até nove tentativas compartilhadas' : gameMode === 'DUETO' ? 'Descubra duas palavras com até sete tentativas compartilhadas' : 'Descubra a palavra secreta em até seis tentativas'} antes do tempo acabar.</p>
     <label className="field-label" htmlFor="player-name">COMO PODEMOS TE CHAMAR?</label>
     <input id="player-name" className="text-input" maxLength={18} placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
     <div className="landing-create-controls">
@@ -374,7 +374,7 @@ export function App() {
         </button>;
       })}</div>}
     </section>
-    <p className="landing-foot"><span>◷</span> {durationMinutes} {durationMinutes === 1 ? 'minuto' : 'minutos'} <i/> <span>⌁</span> Até {gameMode === 'QUARTETO_SEQUENCIAL' ? 10 : gameMode === 'QUARTETO' ? 9 : gameMode === 'DUETO' ? 7 : 6} tentativas</p>
+    <p className="landing-foot"><span>◷</span> {durationMinutes} {durationMinutes === 1 ? 'minuto' : 'minutos'} <i/> <span>⌁</span> Até {gameMode === 'QUARTETO_SEQUENCIAL' ? 12 : gameMode === 'QUARTETO' ? 9 : gameMode === 'DUETO' ? 7 : 6} tentativas</p>
     {notice && <div className="toast" role="status">{notice}</div>}
   </div><div className="landing-stamp">FEITO PARA<br/>JOGAR JUNTO <span>✳</span></div></main>;
 
