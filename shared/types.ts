@@ -1,5 +1,5 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
-export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'QUARTETO_SEQUENCIAL' | 'SEQUENCIA' | (string & {});
+export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'QUARTETO_SEQUENCIAL' | 'SEQUENCIA' | 'DUELO' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
@@ -8,7 +8,8 @@ export interface PublicPlayer {
 }
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
-  gameMode: GameMode; durationMinutes: number; sequenceLength: number;
+  gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number;
+  dueloTurnPlayerId?: string;
   quartetoRevealedBoards?: number;
   guesses: GuessView[]; sequenceProgress?: Array<{ guesses: GuessView[]; attempts: number; solved: boolean }>; endsAt: number | null; remainingMs: number; winsRanking: PublicPlayer[]; guessLimit: number;
   solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;
@@ -23,9 +24,9 @@ export interface ServerToClientEvents {
 }
 export interface ClientToServerEvents {
   'rooms:list': (callback: (rooms: RoomSummary[]) => void) => void;
-  'room:create': (payload: { name: string; gameMode: GameMode; durationMinutes: number; sequenceLength?: number }, callback: (result: { code?: string; playerId?: string; resumeToken?: string; error?: string }) => void) => void;
+  'room:create': (payload: { name: string; gameMode: GameMode; durationMinutes: number; sequenceLength?: number; dueloTurnSeconds?: number }, callback: (result: { code?: string; playerId?: string; resumeToken?: string; error?: string }) => void) => void;
   'room:join': (payload: { code: string; name: string }, callback: (result: { playerId?: string; resumeToken?: string; error?: string }) => void) => void;
-  'room:update-settings': (payload: { gameMode: GameMode; durationMinutes: number; sequenceLength?: number }) => void;
+  'room:update-settings': (payload: { gameMode: GameMode; durationMinutes: number; sequenceLength?: number; dueloTurnSeconds?: number }) => void;
   'room:resume': (payload: { playerId: string; resumeToken: string }, callback: (result: { state?: MatchView; error?: string }) => void) => void;
   'match:start': () => void;
   'match:give-up': () => void;

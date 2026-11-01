@@ -45,8 +45,10 @@ export function App() {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [gameMode, setGameMode] = useState<GameMode>('TERMO');
   const [durationMinutes, setDurationMinutes] = useState(3);
+  const [dueloTurnSeconds, setDueloTurnSeconds] = useState(30);
   const [sequenceLength, setSequenceLength] = useState(3);
-  const modeDefaultDuration: Record<string, number> = { TERMO: 3, DUETO: 4, QUARTETO: 5, QUARTETO_SEQUENCIAL: 5, SEQUENCIA: 5 };
+  const modeDefaultDuration: Record<string, number> = { TERMO: 3, DUETO: 4, QUARTETO: 5, QUARTETO_SEQUENCIAL: 5, SEQUENCIA: 5, DUELO: 3 };
+  const turnTimeOptions = [10, 20, 30, 40, 50, 60];
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [resuming, setResuming] = useState(Boolean(readRoomSession()));
   const sessionRef = useRef<RoomSession | null>(readRoomSession());
@@ -76,6 +78,9 @@ export function App() {
       if (previousPhase === 'lobby' && state.phase === 'playing' && 'vibrate' in navigator) navigator.vibrate([80, 40, 120]);
       const previousMe = previousState?.players.find((player) => player.id === state.me);
       const currentMe = state.players.find((player) => player.id === state.me);
+      if (state.phase === 'playing' && state.gameMode === 'DUELO' && previousMe?.id === previousState?.dueloTurnPlayerId && state.dueloTurnPlayerId !== previousState?.dueloTurnPlayerId) {
+        setDraft(''); draftRef.current = ''; setActiveTile(0);
+      }
       const previousWordIndex = previousMe?.wordIndex ?? 0;
       const previousWord = previousState?.sequenceProgress?.[previousWordIndex];
       const currentWord = state.sequenceProgress?.[previousWordIndex];
@@ -160,10 +165,15 @@ export function App() {
   }, [showNotice, socket]);
 
   useEffect(() => {
-    if (!match || match.phase !== 'playing' || !match.endsAt) return;
+    if (!match || !match.endsAt || match.phase !== 'playing') return;
     const update = () => setRemaining(Math.max(0, Math.ceil((match.endsAt! - Date.now()) / 1000)));
     update(); const id = window.setInterval(update, 250); return () => window.clearInterval(id);
   }, [match?.phase, match?.endsAt]);
+
+  useEffect(() => {
+    if (!match || match.phase !== 'lobby') return;
+    setDueloTurnSeconds(match.dueloTurnSeconds);
+  }, [match?.phase, match?.dueloTurnSeconds]);
 
   useEffect(() => {
     if (!match) return;
@@ -205,7 +215,7 @@ export function App() {
   const persistName = () => { const value = name.trim() || 'Jogador'; setName(value); localStorage.setItem('termo-name', value); return value; };
   const createRoom = () => {
     if (!socket.connected) { setNotice('Conectando ao servidor… tente novamente em alguns segundos.'); socket.connect(); return; }
-    socket.timeout(5000).emit('room:create', { name: persistName(), gameMode, durationMinutes, sequenceLength }, (timeoutError, result) => {
+    socket.timeout(5000).emit('room:create', { name: persistName(), gameMode, durationMinutes, sequenceLength, dueloTurnSeconds }, (timeoutError, result) => {
       if (timeoutError) setNotice('O servidor não respondeu. Confira se npm run dev está rodando.');
       else if (result.error) setNotice(result.error);
     else if (result.code && result.playerId && result.resumeToken) {
@@ -283,8 +293,8 @@ export function App() {
 
   const leave = () => { socket.emit('room:leave'); sessionRef.current = null; localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); setResuming(false); setMatch(null); setDraft(''); setRoomCode(''); window.history.replaceState(null, '', '/'); };
   const returnToLobby = () => { setDraft(''); setActiveTile(0); socket.emit('room:return-lobby'); };
-  const updateRoomSettings = (nextMode: GameMode, nextDuration = match?.durationMinutes ?? 3, nextSequenceLength = match?.sequenceLength ?? 3) => {
-    socket.emit('room:update-settings', { gameMode: nextMode, durationMinutes: nextDuration, sequenceLength: nextSequenceLength });
+  const updateRoomSettings = (nextMode: GameMode, nextDuration = match?.durationMinutes ?? 3, nextSequenceLength = match?.sequenceLength ?? 3, nextDueloTurnSeconds = match?.dueloTurnSeconds ?? dueloTurnSeconds) => {
+    socket.emit('room:update-settings', { gameMode: nextMode, durationMinutes: nextDuration, sequenceLength: nextSequenceLength, dueloTurnSeconds: nextDueloTurnSeconds });
   };
   const copyInvite = async () => {
     if (!match) return;
@@ -341,7 +351,7 @@ export function App() {
     return map;
   }, [boardCount, match?.gameMode, match?.guesses, quartetoActiveBoard, solvedBoards.join(',')]);
 
-  const formattedTime = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
+  const formattedTime = match?.gameMode === 'DUELO' ? `0:${String(remaining).padStart(2, '0')}` : `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
   const finished = match?.phase === 'finished';
 
   if (!match && resuming) return <main className="landing"><div className="landing-card"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><p className="intro">Reconectando à sua sala…</p>{notice && <div className="toast" role="status">{notice}</div>}</div></main>;
@@ -358,7 +368,8 @@ export function App() {
       </button>
     </div>
     {roomSettingsOpen && <section className="room-settings" id="room-settings" aria-label="Configurações da sala">
-      <label className="room-setting"><span>Modo de jogo</span><select value={gameMode} onChange={(event) => { const mode = event.target.value as GameMode; setGameMode(mode); setDurationMinutes(modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="QUARTETO_SEQUENCIAL">QUARTETO SEQUENCIAL</option><option value="SEQUENCIA">SEQUÊNCIA</option></select></label>
+      <label className="room-setting"><span>Modo de jogo</span><select value={gameMode} onChange={(event) => { const mode = event.target.value as GameMode; setGameMode(mode); setDurationMinutes(modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="QUARTETO_SEQUENCIAL">QUARTETO SEQUENCIAL</option><option value="SEQUENCIA">SEQUÊNCIA</option><option value="DUELO">DUELO (2 jogadores)</option></select></label>
+      {gameMode === 'DUELO' && <label className="room-setting"><span>Tempo por jogada</span><select value={dueloTurnSeconds} onChange={(event) => setDueloTurnSeconds(Number(event.target.value))}>{turnTimeOptions.map((seconds) => <option key={seconds} value={seconds}>{seconds} segundos</option>)}</select></label>}
       <label className="room-setting"><span>Tempo da rodada</span><select value={durationMinutes} onChange={(event) => setDurationMinutes(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => index + 1).map((minutes) => <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>)}</select></label>
       {gameMode === 'SEQUENCIA' && <label className="room-setting sequence-setting"><span>Palavras na sequência</span><select value={sequenceLength} onChange={(event) => setSequenceLength(Number(event.target.value))}>{Array.from({ length: 9 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} palavras</option>)}</select></label>}
     </section>}
@@ -382,18 +393,19 @@ export function App() {
 
   if (match.phase === 'lobby') {
     const isHost = match.players.find((p) => p.id === match.me)?.isHost;
-    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><div className="lobby-settings">{isHost ? <><label className="room-setting"><span>Modo de jogo</span><select value={match.gameMode} onChange={(event) => { const mode = event.target.value as GameMode; updateRoomSettings(mode, modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="QUARTETO_SEQUENCIAL">QUARTETO SEQUENCIAL</option><option value="SEQUENCIA">SEQUÊNCIA</option></select></label><label className="room-setting"><span>Tempo da rodada</span><select value={match.durationMinutes} onChange={(event) => updateRoomSettings(match.gameMode, Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => { const minutes = index + 1; return <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>; })}</select></label>{match.gameMode === 'SEQUENCIA' && <label className="room-setting sequence-setting"><span>Tamanho da sequência</span><select value={match.sequenceLength} onChange={(event) => updateRoomSettings(match.gameMode, match.durationMinutes, Number(event.target.value))}>{Array.from({ length: 9 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} palavras</option>)}</select></label>}</> : <p><b>{match.gameMode === 'QUARTETO_SEQUENCIAL' ? 'QUARTETO SEQUENCIAL' : match.gameMode} · {match.durationMinutes} {match.durationMinutes === 1 ? 'minuto' : 'minutos'}</b><br/>Configurações definidas pelo anfitrião</p>}</div><h2>Na sala <span>{match.players.length}</span></h2><div className="player-list">{match.players.map((player, index) => <div className="player-row" key={player.id}><span className={`avatar avatar-${index % 5}`}>{player.name.slice(0, 1).toUpperCase()}</span><span>{player.name}{player.id === match.me && <small> · você</small>}</span>{player.isHost && <span className="host-tag">ANFITRIÃO</span>}</div>)}</div>{winsLeaderboard}{isHost && <button className="primary-button start-button" onClick={() => socket.emit('match:start')}>Começar rodada <span>↗</span></button>}</section>{notice && <div className="toast" role="status">{notice}</div>}</main>;
+    return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card"><div className="lobby-icon">✳</div><p className="eyebrow">SALA DE JOGO</p><h1>Chame a turma.</h1><p className="intro">{isHost ? 'Quando todo mundo estiver pronto, comece a próxima rodada.' : 'Aguardando o anfitrião começar a próxima rodada.'}</p><button className="room-code" onClick={copyInvite} aria-label="Copiar convite"><span>{match.code}</span><small>{copied ? 'COPIADO ✓' : 'TOQUE PARA COPIAR ↗'}</small></button><div className="lobby-settings">{isHost ? <><label className="room-setting"><span>Modo de jogo</span><select value={match.gameMode} onChange={(event) => { const mode = event.target.value as GameMode; updateRoomSettings(mode, modeDefaultDuration[mode]); }}><option value="TERMO">TERMO</option><option value="DUETO">DUETO</option><option value="QUARTETO">QUARTETO</option><option value="QUARTETO_SEQUENCIAL">QUARTETO SEQUENCIAL</option><option value="SEQUENCIA">SEQUÊNCIA</option><option value="DUELO">DUELO (2 jogadores)</option></select></label>{match.gameMode === 'DUELO' && <label className="room-setting"><span>Tempo por jogada</span><select value={match.dueloTurnSeconds} onChange={(event) => updateRoomSettings(match.gameMode, match.durationMinutes, match.sequenceLength, Number(event.target.value))}>{turnTimeOptions.map((seconds) => <option key={seconds} value={seconds}>{seconds} segundos</option>)}</select></label>}<label className="room-setting"><span>Tempo da rodada</span><select value={match.durationMinutes} onChange={(event) => updateRoomSettings(match.gameMode, Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => { const minutes = index + 1; return <option key={minutes} value={minutes}>{minutes} {minutes === 1 ? 'minuto' : 'minutos'}</option>; })}</select></label>{match.gameMode === 'SEQUENCIA' && <label className="room-setting sequence-setting"><span>Tamanho da sequência</span><select value={match.sequenceLength} onChange={(event) => updateRoomSettings(match.gameMode, match.durationMinutes, Number(event.target.value))}>{Array.from({ length: 9 }, (_, index) => index + 2).map((count) => <option key={count} value={count}>{count} palavras</option>)}</select></label>}</> : <p><b>{match.gameMode === 'QUARTETO_SEQUENCIAL' ? 'QUARTETO SEQUENCIAL' : match.gameMode} · {match.durationMinutes} {match.durationMinutes === 1 ? 'minuto' : 'minutos'}</b><br/>Configurações definidas pelo anfitrião</p>}</div><h2>Na sala <span>{match.players.length}</span></h2><div className="player-list">{match.players.map((player, index) => <div className="player-row" key={player.id}><span className={`avatar avatar-${index % 5}`}>{player.name.slice(0, 1).toUpperCase()}</span><span>{player.name}{player.id === match.me && <small> · você</small>}</span>{player.isHost && <span className="host-tag">ANFITRIÃO</span>}</div>)}</div>{winsLeaderboard}{isHost && <button className="primary-button start-button" onClick={() => socket.emit('match:start')}>Começar rodada <span>↗</span></button>}</section>{notice && <div className="toast" role="status">{notice}</div>}</main>;
   }
 
   const me = match.players.find((p) => p.id === match.me);
   const waitingNextRound = (match.phase === 'playing' && me?.status === 'waiting') || (finished && me?.returnedToLobby === true);
   const canPlay = !finished && !waitingNextRound && me?.status === 'playing';
+  const dueloMyTurn = match.gameMode !== 'DUELO' || match.dueloTurnPlayerId === match.me;
   const winner = match.ranking?.find((player) => player.status === 'won');
   if (waitingNextRound) return <main className="lobby-page"><header className="topbar"><div className="brand"><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></div><div className="topbar-actions">{themeToggle}<button className="quiet-button" onClick={leave}>Sair da sala</button></div></header><section className="lobby-card waiting-card"><div className="lobby-icon">◷</div><p className="eyebrow">AGUARDANDO O ANFITRIÃO</p><h1>Você voltou!</h1><p className="intro">A rodada terminou. Você está no lobby; a próxima partida começará quando o anfitrião retornar.</p><div className="waiting-room-code">SALA <b>{match.code}</b></div><div className="waiting-note"><span className="live-dot"/> Aguardando o anfitrião…</div>{winsLeaderboard}</section>{notice && <div className="toast" role="status">{notice}</div>}</main>;
     const selectedWord = me?.wordIndex ?? 0;
   const selectedWordState = match.sequenceProgress?.[selectedWord];
   const canNavigateSequence = match.gameMode === 'SEQUENCIA' && match.phase === 'playing' && !waitingNextRound && (canPlay || me?.status === 'won' || me?.status === 'lost');
-  const canGuess = canPlay && (match.gameMode !== 'SEQUENCIA' || (!selectedWordState?.solved && (selectedWordState?.attempts ?? 0) < guessLimit));
+  const canGuess = canPlay && dueloMyTurn && (match.gameMode !== 'SEQUENCIA' || (!selectedWordState?.solved && (selectedWordState?.attempts ?? 0) < guessLimit));
     return <main className="game-page"><header className="topbar game-topbar"><button className="brand brand-button" onClick={leave}><span className="brand-mark">T</span><span>TERMO<span className="brand-dot">.</span></span></button><div className={`timer ${remaining <= 30 ? 'timer-urgent' : ''}`}><span>◷</span>{formattedTime}</div><div className="topbar-actions">{themeToggle}{canPlay && <button type="button" className="quiet-button give-up-button" onClick={() => { if (window.confirm('Tem certeza de que deseja desistir desta partida?')) { setDraft(''); socket.emit('match:give-up'); } }}>Desistir</button>}</div></header>
     <div className={`game-layout ${finished ? 'game-layout-finished' : ''}`}><section className="board-column"><div className="match-heading"><span className="live-dot"/> SALA <b>{match.code}</b><span className="heading-sep">·</span> <span>{match.players.length} jogadores</span></div>
       <div className={`boards ${boardCount === 2 ? 'boards-dueto' : boardCount === 4 ? 'boards-quarteto' : ''} ${sequentialQuarteto ? 'boards-quarteto-sequential' : ''}`}>{Array.from({ length: boardCount }, (_, boardIndex) => {
@@ -441,7 +453,7 @@ export function App() {
         const status = (keyStatuses as Map<string, TileStatus>).get(letter);
         return <button key={letter} className={`key ${status ? `key-${status}` : ''}`} onClick={() => { vibrateForVirtualKey(); setLetter(letter); }}>{letter}</button>;
       })}{ri === 1 && <button className="key key-action key-delete" aria-label="Apagar" onClick={() => { vibrateForVirtualKey(); backspace(); }}>⌫</button>}{ri === 2 && <button className="key key-action" onClick={() => { vibrateForVirtualKey(); submitGuess(); }}>↵</button>}</div>)}</section> : <div className="board-spacer"/>}
-      <div className="board-caption">{sequentialQuarteto && !finished ? `${quartetoRevealedBoards} DE 4 PALAVRAS REVELADAS${solvedBoards[quartetoActiveBoard] ? ' · ESTA PALAVRA JÁ FOI RESOLVIDA' : ''}` : match.gameMode === 'SEQUENCIA' && !finished ? `${me?.wordsSolved ?? 0} DE ${match.sequenceLength} PALAVRAS RESOLVIDAS${selectedWordState?.solved ? ' · ESTA PALAVRA JÁ FOI RESOLVIDA' : (selectedWordState?.attempts ?? 0) >= guessLimit ? ' · LIMITE DE TENTATIVAS ATINGIDO' : ''}` : finished ? `A palavra era ${match.solutions?.join(' · ') ?? match.solution}` : canPlay ? boardCount > 1 && solvedBoards.some(Boolean) ? 'PALAVRAS RESOLVIDAS FICAM BLOQUEADAS — CONTINUE NAS OUTRAS' : 'TOQUE EM UMA CASA PARA ESCOLHER ONDE DIGITAR' : 'SUA PARTIDA FOI CONCLUÍDA'}</div>
+      <div className="board-caption">{match.gameMode === 'DUELO' && !finished ? dueloMyTurn ? 'SUA VEZ — FAÇA UMA TENTATIVA' : `VEZ DE ${match.players.find((player) => player.id === match.dueloTurnPlayerId)?.name ?? 'OUTRO JOGADOR'}` : sequentialQuarteto && !finished ? `${quartetoRevealedBoards} DE 4 PALAVRAS REVELADAS${solvedBoards[quartetoActiveBoard] ? ' · ESTA PALAVRA JÁ FOI RESOLVIDA' : ''}` : match.gameMode === 'SEQUENCIA' && !finished ? `${me?.wordsSolved ?? 0} DE ${match.sequenceLength} PALAVRAS RESOLVIDAS${selectedWordState?.solved ? ' · ESTA PALAVRA JÁ FOI RESOLVIDA' : (selectedWordState?.attempts ?? 0) >= guessLimit ? ' · LIMITE DE TENTATIVAS ATINGIDO' : ''}` : finished ? `A palavra era ${match.solutions?.join(' · ') ?? match.solution}` : canPlay ? boardCount > 1 && solvedBoards.some(Boolean) ? 'PALAVRAS RESOLVIDAS FICAM BLOQUEADAS — CONTINUE NAS OUTRAS' : 'TOQUE EM UMA CASA PARA ESCOLHER ONDE DIGITAR' : 'SUA PARTIDA FOI CONCLUÍDA'}</div>
     </section><aside className={`players-panel ${finished ? 'results-panel' : ''}`}>
       {finished ? <>
         {winner ? <div className="winner-celebration"><span className="fireworks" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/></span><span className="winner-trophy" aria-hidden="true">🏆</span><p className="eyebrow">CAMPEÃO DA RODADA</p><h1>{winner.name}</h1><p className="winner-score">{match.gameMode === 'SEQUENCIA' ? `${winner.wordsSolved ?? 0} palavras · ${((winner.elapsedMs ?? 0) / 1000).toFixed(1)}s` : `${winner.guessesUsed ?? winner.attempts} ${(winner.guessesUsed ?? winner.attempts) === 1 ? 'tentativa' : 'tentativas'} · ${((winner.elapsedMs ?? 0) / 1000).toFixed(1)}s`}</p></div> : <div className="winner-celebration no-winner"><p className="eyebrow">FIM DE JOGO</p><h1>Ninguém descobriu</h1></div>}

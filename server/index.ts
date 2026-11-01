@@ -25,12 +25,12 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { 
 interface Guess { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord: string }
 interface SequenceWordState { guesses: Guess[]; attempts: number; solved: boolean }
 interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; elapsedMs?: number; wins: number; returnedToLobby: boolean; wordsSolved: number; wordIndex: number; quartetoWordIndex: number; sequenceStartedAt?: number; sequenceElapsedMs?: number; currentSolution?: string; sequenceWords: string[]; sequenceProgress: SequenceWordState[] }
-interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; endsAt: number | null; timer?: NodeJS.Timeout }
+interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
 function roomSummaries(): RoomSummary[] {
-  return [...rooms.values()].map((room) => ({ code: room.code, playerCount: room.players.size, capacity: 12, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes }));
+  return [...rooms.values()].map((room) => ({ code: room.code, playerCount: room.players.size, capacity: room.gameMode === 'DUELO' ? 2 : 12, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes }));
 }
 function broadcastRooms(): void { io.emit('rooms:state', roomSummaries()); }
 
@@ -56,7 +56,7 @@ function solvedBoardCount(player: Player, boardCount: number): number {
 function state(room: Room, playerId: string): MatchView {
   const player = room.players.get(playerId)!;
   const reveal = room.phase === 'finished';
-  const roundStartedAt = room.endsAt ? room.endsAt - room.durationMinutes * 60 * 1000 : undefined;
+  const roundStartedAt = room.endsAt ? room.endsAt - (room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : room.durationMinutes * 60 * 1000) : undefined;
   const guessLimit = guessLimitFor(room.gameMode);
   const boardCount = room.gameMode === 'QUARTETO' || room.gameMode === 'QUARTETO_SEQUENCIAL' ? 4 : room.gameMode === 'DUETO' ? 2 : 1;
   const rankedPlayers = [...room.players.values()].filter((participant) => participant.status !== 'waiting').sort((a, b) => {
@@ -87,20 +87,34 @@ function state(room: Room, playerId: string): MatchView {
   const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), ...(room.gameMode === 'SEQUENCIA' ? { elapsedMs: participant.sequenceElapsedMs } : {}), isHost: participant.id === room.hostId, rank: finalRanks.get(participant.id)! })) : undefined;
   const winsRanking = [...room.players.values()].map((participant) => ({ ...publicPlayer(participant), isHost: participant.id === room.hostId })).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
   return {
-    code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, sequenceLength: room.sequenceLength, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
+    code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, sequenceLength: room.sequenceLength, dueloTurnSeconds: room.dueloTurnSeconds, dueloTurnPlayerId: room.gameMode === 'DUELO' ? room.dueloTurnPlayerId : undefined, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
     players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g, results: g.results?.map((result) => result ? [...result] : null) })), ...(room.gameMode === 'SEQUENCIA' ? { sequenceProgress: player.sequenceProgress.map((word) => ({ guesses: word.guesses.map((guess) => ({ ...guess })), attempts: word.attempts, solved: word.solved })) } : {}), endsAt: room.endsAt,
-    remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.durationMinutes * 60 * 1000, winsRanking,
+    remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : room.durationMinutes * 60 * 1000, winsRanking,
     me: playerId, ...(reveal ? { solution: room.gameMode === 'SEQUENCIA' ? room.solutions.at(-1) : room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ranking } : {}),
   };
 }
 function broadcast(room: Room): void {
   for (const player of room.players.values()) if (player.socketId) io.to(player.socketId).emit('match:state', state(room, player.id));
 }
+function startDueloTurn(room: Room, playerId: string): void {
+  if (room.timer) clearTimeout(room.timer);
+  room.dueloTurnPlayerId = playerId;
+  room.endsAt = Date.now() + room.dueloTurnSeconds * 1000;
+  room.timer = setTimeout(() => {
+    if (room.phase !== 'playing' || room.gameMode !== 'DUELO') return;
+    const nextPlayerId = [...room.players.keys()].find((id) => id !== room.dueloTurnPlayerId);
+    if (!nextPlayerId) return finish(room);
+    startDueloTurn(room, nextPlayerId);
+    broadcast(room);
+  }, room.dueloTurnSeconds * 1000);
+}
 function finish(room: Room): void {
   if (room.phase !== 'playing') return;
-    room.phase = 'finished';
+  const finishedAt = Date.now();
+  room.phase = 'finished';
   if (room.timer) clearTimeout(room.timer);
+  room.endsAt = room.gameMode === 'DUELO' ? finishedAt : null;
   for (const player of room.players.values()) if (player.status === 'playing') player.status = 'lost';
   const ranked = [...room.players.values()].filter((player) => player.status !== 'waiting').sort((a, b) => room.gameMode === 'SEQUENCIA'
     ? b.wordsSolved - a.wordsSolved || (a.sequenceElapsedMs ?? Infinity) - (b.sequenceElapsedMs ?? Infinity)
@@ -148,9 +162,10 @@ function removePlayer(socket: Socket<ClientToServerEvents, ServerToClientEvents>
 
 io.on('connection', (socket) => {
   socket.on('rooms:list', (callback) => callback(roomSummaries()));
-  socket.on('room:create', ({ name, gameMode, durationMinutes, sequenceLength }, callback) => {
-    if (gameMode !== 'TERMO' && gameMode !== 'DUETO' && gameMode !== 'QUARTETO' && gameMode !== 'QUARTETO_SEQUENCIAL' && gameMode !== 'SEQUENCIA') return callback({ error: 'Modo de jogo inválido.' });
+  socket.on('room:create', ({ name, gameMode, durationMinutes, sequenceLength, dueloTurnSeconds }, callback) => {
+    if (gameMode !== 'TERMO' && gameMode !== 'DUETO' && gameMode !== 'QUARTETO' && gameMode !== 'QUARTETO_SEQUENCIAL' && gameMode !== 'SEQUENCIA' && gameMode !== 'DUELO') return callback({ error: 'Modo de jogo inválido.' });
     if (!Number.isInteger(durationMinutes) || durationMinutes < MIN_DURATION_MINUTES || durationMinutes > MAX_DURATION_MINUTES) return callback({ error: 'A duração deve ser de 1 a 10 minutos.' });
+    if (dueloTurnSeconds !== undefined && (!Number.isInteger(dueloTurnSeconds) || dueloTurnSeconds < 10 || dueloTurnSeconds > 60 || dueloTurnSeconds % 10 !== 0)) return callback({ error: 'O tempo por jogada no DUELO deve ser de 10 a 60 segundos, em intervalos de 10.' });
     const previousCode = socketRoom.get(socket.id);
     const previousRoom = previousCode && rooms.get(previousCode);
     const previousPlayer = previousRoom && [...previousRoom.players.values()].find((player) => player.socketId === socket.id);
@@ -161,7 +176,7 @@ io.on('connection', (socket) => {
     const resumeToken = randomBytes(32).toString('base64url');
     const requestedSequenceLength = sequenceLength ?? 3;
     if (!Number.isInteger(requestedSequenceLength) || requestedSequenceLength < 2 || requestedSequenceLength > 10) return callback({ error: 'A sequência deve ter de 2 a 10 palavras.' });
-    const room: Room = { code: roomCode, hostId: playerId, solution: '', solutions: [], players: new Map(), phase: 'lobby', gameMode, durationMinutes, sequenceLength: requestedSequenceLength, endsAt: null };
+    const room: Room = { code: roomCode, hostId: playerId, solution: '', solutions: [], players: new Map(), phase: 'lobby', gameMode, durationMinutes, sequenceLength: requestedSequenceLength, dueloTurnSeconds: dueloTurnSeconds ?? 30, endsAt: null };
     const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: 'playing', wins: 0, returnedToLobby: false, wordsSolved: 0, wordIndex: 0, quartetoWordIndex: 0, sequenceWords: [], sequenceProgress: [] };
     room.players.set(player.id, player); rooms.set(roomCode, room); socketRoom.set(socket.id, roomCode); socket.join(roomCode);
     callback({ code: roomCode, playerId, resumeToken }); broadcast(room); broadcastRooms();
@@ -169,7 +184,8 @@ io.on('connection', (socket) => {
   socket.on('room:join', ({ code: requestedCode, name }, callback) => {
     const room = rooms.get(requestedCode.trim().toUpperCase());
     if (!room) return callback({ error: 'Sala não encontrada. Confira o código.' });
-    if (room.players.size >= 12) return callback({ error: 'Esta sala está cheia.' });
+    const roomCapacity = room.gameMode === 'DUELO' ? 2 : 12;
+    if (room.players.size >= roomCapacity) return callback({ error: 'Esta sala está cheia.' });
     const previousCode = socketRoom.get(socket.id);
     const previousRoom = previousCode && rooms.get(previousCode);
     const previousPlayer = previousRoom && [...previousRoom.players.values()].find((player) => player.socketId === socket.id);
@@ -204,16 +220,20 @@ io.on('connection', (socket) => {
     broadcast(room);
     broadcastRooms();
   });
-  socket.on('room:update-settings', ({ gameMode, durationMinutes, sequenceLength }) => {
+  socket.on('room:update-settings', ({ gameMode, durationMinutes, sequenceLength, dueloTurnSeconds }) => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     const playerId = room && [...room.players.values()].find((player) => player.socketId === socket.id)?.id;
     if (!room || room.phase !== 'lobby' || room.hostId !== playerId) return;
-    if (gameMode !== 'TERMO' && gameMode !== 'DUETO' && gameMode !== 'QUARTETO' && gameMode !== 'QUARTETO_SEQUENCIAL' && gameMode !== 'SEQUENCIA') return socket.emit('match:error', 'Modo de jogo inválido.');
+    if (gameMode !== 'TERMO' && gameMode !== 'DUETO' && gameMode !== 'QUARTETO' && gameMode !== 'QUARTETO_SEQUENCIAL' && gameMode !== 'SEQUENCIA' && gameMode !== 'DUELO') return socket.emit('match:error', 'Modo de jogo inválido.');
+    if (gameMode === 'DUELO' && room.players.size > 2) return socket.emit('match:error', 'DUELO permite no máximo 2 jogadores. Remova jogadores da sala antes de mudar o modo.');
     if (!Number.isInteger(durationMinutes) || durationMinutes < MIN_DURATION_MINUTES || durationMinutes > MAX_DURATION_MINUTES) return socket.emit('match:error', 'A duração deve ser de 1 a 10 minutos.');
+    const nextDueloTurnSeconds = dueloTurnSeconds ?? room.dueloTurnSeconds;
+    if (!Number.isInteger(nextDueloTurnSeconds) || nextDueloTurnSeconds < 10 || nextDueloTurnSeconds > 60 || nextDueloTurnSeconds % 10 !== 0) return socket.emit('match:error', 'O tempo por jogada no DUELO deve ser de 10 a 60 segundos, em intervalos de 10.');
     const nextSequenceLength = sequenceLength ?? room.sequenceLength;
     if (!Number.isInteger(nextSequenceLength) || nextSequenceLength < 2 || nextSequenceLength > 10) return socket.emit('match:error', 'A sequência deve ter de 2 a 10 palavras.');
     room.gameMode = gameMode;
     room.durationMinutes = durationMinutes;
+    room.dueloTurnSeconds = nextDueloTurnSeconds;
     room.sequenceLength = nextSequenceLength;
     broadcast(room);
     broadcastRooms();
@@ -223,6 +243,7 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'lobby') return;
     const playerId = [...room.players.values()].find((player) => player.socketId === socket.id)?.id;
     if (room.hostId !== playerId) return socket.emit('match:error', 'Somente o anfitrião pode iniciar a partida.');
+    if (room.gameMode === 'DUELO' && room.players.size !== 2) return socket.emit('match:error', `DUELO precisa de exatamente 2 jogadores para começar. Atualmente há ${room.players.size}.`);
     room.solutions = room.gameMode === 'SEQUENCIA' ? [] : [WordService.getRandomWord()];
     const boardCount = room.gameMode === 'QUARTETO' || room.gameMode === 'QUARTETO_SEQUENCIAL' ? 4 : room.gameMode === 'DUETO' ? 2 : 1;
     while (room.gameMode !== 'SEQUENCIA' && room.solutions.length < boardCount) {
@@ -248,9 +269,11 @@ io.on('connection', (socket) => {
       player.status = 'playing';
       player.returnedToLobby = false;
     }
+    room.dueloTurnPlayerId = room.gameMode === 'DUELO' ? room.hostId : undefined;
     const roundDurationMs = room.durationMinutes * 60 * 1000;
-    room.phase = 'playing'; room.endsAt = Date.now() + roundDurationMs;
-    room.timer = setTimeout(() => finish(room), roundDurationMs);
+    room.phase = 'playing'; room.endsAt = Date.now() + (room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : roundDurationMs);
+    if (room.gameMode === 'DUELO') startDueloTurn(room, room.hostId);
+    else room.timer = setTimeout(() => finish(room), roundDurationMs);
     broadcast(room);
     broadcastRooms();
   });
@@ -258,7 +281,15 @@ io.on('connection', (socket) => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     const player = room && [...room.players.values()].find((candidate) => candidate.socketId === socket.id);
     if (!room || !player || room.phase !== 'playing' || player.status !== 'playing') return;
-    if (room.endsAt! <= Date.now()) return finish(room);
+    if (room.gameMode === 'DUELO' && room.dueloTurnPlayerId !== player.id) return socket.emit('match:error', 'Aguarde sua vez.');
+    if (room.endsAt! <= Date.now()) {
+      if (room.gameMode === 'DUELO') {
+        const nextPlayerId = [...room.players.keys()].find((id) => id !== room.dueloTurnPlayerId);
+        if (nextPlayerId) { startDueloTurn(room, nextPlayerId); broadcast(room); }
+        return;
+      }
+      return finish(room);
+    }
     if (room.gameMode === 'SEQUENCIA' && (player.sequenceProgress[player.wordIndex]?.solved || player.sequenceProgress[player.wordIndex]?.attempts >= guessLimitFor(room.gameMode))) return;
     const guess = word.trim().toLocaleUpperCase('pt-BR');
     if (!WordService.isValidFormat(guess)) return socket.emit('match:error', 'A palavra precisa ter 5 letras.');
@@ -269,6 +300,13 @@ io.on('connection', (socket) => {
       : player.guesses;
     if (previousGuesses.some((pastGuess) => WordService.normalizeWord(pastGuess.word) === normalizedGuess)) {
       return socket.emit('match:error', 'Você já tentou essa palavra. Escolha outra.');
+    }
+    if (room.gameMode === 'DUELO' && player.guesses.length >= guessLimitFor(room.gameMode)) return;
+    if (room.gameMode === 'DUELO') {
+      if (room.timer) clearTimeout(room.timer);
+      const nextPlayerId = [...room.players.keys()].find((id) => id !== player.id);
+      if (!nextPlayerId) return finish(room);
+      startDueloTurn(room, nextPlayerId);
     }
     const activeSolutions = room.gameMode === 'SEQUENCIA' ? [player.currentSolution ?? room.solution]
       : room.gameMode === 'QUARTETO_SEQUENCIAL' ? [room.solutions[player.quartetoWordIndex]] : room.solutions;
@@ -281,6 +319,29 @@ io.on('connection', (socket) => {
     const firstResult = results.find((result): result is TileStatus[] => result !== null) ?? WordService.score(guess, activeSolutions[0]);
     player.guesses.push({ word: guess, result: firstResult, ...((room.gameMode === 'DUETO' || room.gameMode === 'QUARTETO' || room.gameMode === 'QUARTETO_SEQUENCIAL') ? { results } : {}), revealedWord: WordService.getCanonicalWord(guess) ?? guess }); player.attempts++;
     const solvedNow = activeSolutions.map((_, index) => solvedBefore[index] || results[index]?.every((tile) => tile === 'correct') === true);
+    if (room.gameMode === 'DUELO') {
+      for (const participant of room.players.values()) {
+        if (participant.id === player.id) continue;
+        participant.guesses = player.guesses.map((entry) => ({ ...entry }));
+        participant.attempts = player.attempts;
+      }
+      if (solvedNow.every(Boolean)) {
+        player.status = 'won';
+        player.elapsedMs = Date.now() - (room.endsAt! - room.dueloTurnSeconds * 1000) + (player.attempts - 1) * room.dueloTurnSeconds * 1000;
+        for (const participant of room.players.values()) if (participant.id !== player.id) participant.status = 'lost';
+        finish(room);
+        return;
+      }
+      if (player.attempts >= guessLimitFor(room.gameMode)) {
+        for (const participant of room.players.values()) participant.status = 'lost';
+        finish(room);
+        return;
+      }
+      const nextPlayerId = [...room.players.keys()].find((id) => id !== player.id);
+      if (!nextPlayerId) return finish(room);
+      startDueloTurn(room, nextPlayerId);
+      return broadcast(room);
+    }
     if (room.gameMode === 'SEQUENCIA') {
       const solvedWord = solvedNow.every(Boolean);
       const progress = player.sequenceProgress[player.wordIndex];
@@ -322,6 +383,14 @@ io.on('connection', (socket) => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     const player = room && [...room.players.values()].find((candidate) => candidate.socketId === socket.id);
     if (!room || room.phase !== 'playing' || !player || player.status !== 'playing') return;
+    if (room.gameMode === 'DUELO') {
+      const opponent = [...room.players.values()].find((candidate) => candidate.id !== player.id && candidate.status === 'playing');
+      player.status = 'lost';
+      if (opponent) opponent.status = 'won';
+      if (opponent) opponent.elapsedMs = Date.now() - (room.endsAt! - room.dueloTurnSeconds * 1000) + (opponent.attempts * room.dueloTurnSeconds * 1000);
+      finish(room);
+      return;
+    }
     if (room.gameMode === 'SEQUENCIA') {
       player.status = 'lost';
     } else player.status = 'lost';
@@ -350,7 +419,7 @@ io.on('connection', (socket) => {
       broadcast(room);
       return;
     }
-    room.phase = 'lobby'; room.endsAt = null; room.solution = ''; room.solutions = [];
+    room.phase = 'lobby'; room.endsAt = null; room.solution = ''; room.solutions = []; room.dueloTurnPlayerId = undefined;
     if (room.timer) clearTimeout(room.timer);
     room.timer = undefined;
     for (const participant of room.players.values()) {
