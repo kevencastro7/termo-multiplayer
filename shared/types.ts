@@ -4,12 +4,14 @@ export interface GuessView { word: string; result: TileStatus[]; results?: Array
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
   isHost: boolean; rank?: number; wins: number; returnedToLobby?: boolean;
-  guessesUsed?: number; elapsedMs?: number; wordsSolved?: number; wordIndex?: number; wordCount?: number;
+  guessesUsed?: number; sequenceGuessesUsed?: number; elapsedMs?: number; wordsSolved?: number; wordIndex?: number; wordCount?: number;
 }
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
   gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number;
   dueloTurnPlayerId?: string;
+  roundWinnerId?: string;
+  roundWinnerIds?: string[];
   quartetoRevealedBoards?: number;
   guesses: GuessView[]; sequenceProgress?: Array<{ guesses: GuessView[]; attempts: number; solved: boolean }>; endsAt: number | null; remainingMs: number; winsRanking: PublicPlayer[]; guessLimit: number;
   solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;

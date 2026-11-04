@@ -25,7 +25,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { 
 interface Guess { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord: string }
 interface SequenceWordState { guesses: Guess[]; attempts: number; solved: boolean }
 interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; elapsedMs?: number; wins: number; returnedToLobby: boolean; wordsSolved: number; wordIndex: number; quartetoWordIndex: number; sequenceStartedAt?: number; sequenceElapsedMs?: number; currentSolution?: string; sequenceWords: string[]; sequenceProgress: SequenceWordState[] }
-interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; timer?: NodeJS.Timeout }
+interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; roundWinnerId?: string; roundWinnerIds?: string[]; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
@@ -47,6 +47,9 @@ function publicPlayer(player: Player, reveal = false, roundStartedAt?: number): 
     ...(player.status === 'won' || (reveal && player.status !== 'playing') ? { guessesUsed: player.attempts, elapsedMs: player.elapsedMs ?? (roundStartedAt ? Date.now() - roundStartedAt : undefined) } : {}) };
 }
 function guessLimitFor(mode: GameMode): number { return mode === 'QUARTETO_SEQUENCIAL' ? 12 : mode === 'QUARTETO' ? 9 : mode === 'DUETO' ? 7 : 6; }
+function sequenceGuessesUsed(player: Player): number {
+  return player.sequenceProgress.reduce((total, word) => total + word.attempts, 0);
+}
 function solvedBoardCount(player: Player, boardCount: number): number {
   return Array.from({ length: boardCount }, (_, boardIndex) => player.guesses.some((guess) => {
     const results = guess.results ?? [guess.result];
@@ -61,7 +64,13 @@ function state(room: Room, playerId: string): MatchView {
   const boardCount = room.gameMode === 'QUARTETO' || room.gameMode === 'QUARTETO_SEQUENCIAL' ? 4 : room.gameMode === 'DUETO' ? 2 : 1;
   const rankedPlayers = [...room.players.values()].filter((participant) => participant.status !== 'waiting').sort((a, b) => {
     const aSolved = a.status === 'won'; const bSolved = b.status === 'won';
-    if (room.gameMode === 'SEQUENCIA') return b.wordsSolved - a.wordsSolved || (a.sequenceElapsedMs ?? Infinity) - (b.sequenceElapsedMs ?? Infinity);
+    if (room.gameMode === 'SEQUENCIA') {
+      const solvedDifference = b.wordsSolved - a.wordsSolved;
+      if (solvedDifference !== 0) return solvedDifference;
+      if (a.status === 'won' && b.status === 'won') return (a.sequenceElapsedMs ?? Infinity) - (b.sequenceElapsedMs ?? Infinity);
+      if (a.status !== 'won' && b.status !== 'won') return sequenceGuessesUsed(a) - sequenceGuessesUsed(b);
+      return a.status === 'won' ? -1 : 1;
+    }
     if (aSolved !== bSolved) return aSolved ? -1 : 1;
     if (aSolved && bSolved) return a.attempts - b.attempts || (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity);
     if (room.gameMode === 'TERMO') return 0;
@@ -73,7 +82,12 @@ function state(room: Room, playerId: string): MatchView {
     let previousRank = 0;
     rankedPlayers.forEach((participant, index) => {
       const tied = previous !== undefined && (() => {
-        if (room.gameMode === 'SEQUENCIA') return participant.wordsSolved === previous!.wordsSolved && participant.sequenceElapsedMs === previous!.sequenceElapsedMs;
+        if (room.gameMode === 'SEQUENCIA') {
+          if (participant.wordsSolved !== previous!.wordsSolved) return false;
+          if (participant.status === 'won' && previous!.status === 'won') return participant.sequenceElapsedMs === previous!.sequenceElapsedMs;
+          if (participant.status !== 'won' && previous!.status !== 'won') return sequenceGuessesUsed(participant) === sequenceGuessesUsed(previous!);
+          return false;
+        }
         if (participant.status === 'won' && previous!.status === 'won') return participant.attempts === previous!.attempts && participant.elapsedMs === previous!.elapsedMs;
         if (participant.status !== 'won' && previous!.status !== 'won') return room.gameMode === 'TERMO' || solvedBoardCount(participant, boardCount) === solvedBoardCount(previous!, boardCount);
         return false;
@@ -84,10 +98,10 @@ function state(room: Room, playerId: string): MatchView {
       previousRank = rank;
     });
   }
-  const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), ...(room.gameMode === 'SEQUENCIA' ? { elapsedMs: participant.sequenceElapsedMs } : {}), isHost: participant.id === room.hostId, rank: finalRanks.get(participant.id)! })) : undefined;
+  const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), ...(room.gameMode === 'SEQUENCIA' ? { sequenceGuessesUsed: sequenceGuessesUsed(participant), elapsedMs: participant.sequenceElapsedMs } : room.gameMode === 'QUARTETO_SEQUENCIAL' ? { wordsSolved: participant.wordsSolved } : room.gameMode === 'DUETO' || room.gameMode === 'QUARTETO' ? { wordsSolved: solvedBoardCount(participant, boardCount) } : {}), isHost: participant.id === room.hostId, rank: finalRanks.get(participant.id)! })) : undefined;
   const winsRanking = [...room.players.values()].map((participant) => ({ ...publicPlayer(participant), isHost: participant.id === room.hostId })).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
   return {
-    code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, sequenceLength: room.sequenceLength, dueloTurnSeconds: room.dueloTurnSeconds, dueloTurnPlayerId: room.gameMode === 'DUELO' ? room.dueloTurnPlayerId : undefined, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
+    code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, sequenceLength: room.sequenceLength, dueloTurnSeconds: room.dueloTurnSeconds, dueloTurnPlayerId: room.gameMode === 'DUELO' ? room.dueloTurnPlayerId : undefined, roundWinnerId: reveal ? room.roundWinnerId : undefined, roundWinnerIds: reveal ? room.roundWinnerIds : undefined, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
     players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g, results: g.results?.map((result) => result ? [...result] : null) })), ...(room.gameMode === 'SEQUENCIA' ? { sequenceProgress: player.sequenceProgress.map((word) => ({ guesses: word.guesses.map((guess) => ({ ...guess })), attempts: word.attempts, solved: word.solved })) } : {}), endsAt: room.endsAt,
     remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : room.durationMinutes * 60 * 1000, winsRanking,
@@ -116,15 +130,43 @@ function finish(room: Room): void {
   if (room.timer) clearTimeout(room.timer);
   room.endsAt = room.gameMode === 'DUELO' ? finishedAt : null;
   for (const player of room.players.values()) if (player.status === 'playing') player.status = 'lost';
-  const ranked = [...room.players.values()].filter((player) => player.status !== 'waiting').sort((a, b) => room.gameMode === 'SEQUENCIA'
-    ? b.wordsSolved - a.wordsSolved || (a.sequenceElapsedMs ?? Infinity) - (b.sequenceElapsedMs ?? Infinity)
-    : Number(b.status === 'won') - Number(a.status === 'won') || a.attempts - b.attempts || (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity));
+  room.roundWinnerId = undefined;
+  room.roundWinnerIds = [];
+  const boardCount = room.gameMode === 'QUARTETO' || room.gameMode === 'QUARTETO_SEQUENCIAL' ? 4 : room.gameMode === 'DUETO' ? 2 : 1;
+  const ranked = [...room.players.values()].filter((player) => player.status !== 'waiting').sort((a, b) => {
+    if (room.gameMode === 'SEQUENCIA') {
+      const solvedDifference = b.wordsSolved - a.wordsSolved;
+      if (solvedDifference !== 0) return solvedDifference;
+      if (a.status === 'won' && b.status === 'won') return (a.sequenceElapsedMs ?? Infinity) - (b.sequenceElapsedMs ?? Infinity);
+      if (a.status !== 'won' && b.status !== 'won') return sequenceGuessesUsed(a) - sequenceGuessesUsed(b);
+      return a.status === 'won' ? -1 : 1;
+    }
+    const aSolved = a.status === 'won';
+    const bSolved = b.status === 'won';
+    if (aSolved !== bSolved) return aSolved ? -1 : 1;
+    if (aSolved && bSolved) return a.attempts - b.attempts || (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity);
+    if (room.gameMode === 'TERMO') return 0;
+    return solvedBoardCount(b, boardCount) - solvedBoardCount(a, boardCount);
+  });
   const leader = ranked[0];
-  const runnerUp = ranked[1];
-  const tied = leader && runnerUp && (room.gameMode === 'SEQUENCIA'
-    ? leader.wordsSolved === runnerUp.wordsSolved && leader.sequenceElapsedMs === runnerUp.sequenceElapsedMs
-    : leader.status === runnerUp.status && leader.attempts === runnerUp.attempts && leader.elapsedMs === runnerUp.elapsedMs);
-  if (leader && !tied) leader.wins++;
+  const sameRankAsLeader = (player: Player): boolean => {
+    if (!leader) return false;
+    if (room.gameMode === 'SEQUENCIA') {
+      if (player.wordsSolved !== leader.wordsSolved) return false;
+      if (player.status === 'won' && leader.status === 'won') return player.sequenceElapsedMs === leader.sequenceElapsedMs;
+      if (player.status !== 'won' && leader.status !== 'won') return sequenceGuessesUsed(player) === sequenceGuessesUsed(leader);
+      return false;
+    }
+    if (player.status !== leader.status) return false;
+    if (player.status === 'won') return player.attempts === leader.attempts && player.elapsedMs === leader.elapsedMs;
+    return room.gameMode === 'TERMO' || solvedBoardCount(player, boardCount) === solvedBoardCount(leader, boardCount);
+  };
+  room.roundWinnerIds = leader ? ranked.filter(sameRankAsLeader).map((player) => player.id) : [];
+  for (const player of ranked) {
+    if (!room.roundWinnerIds.includes(player.id)) continue;
+    player.wins++;
+  }
+  room.roundWinnerId = room.roundWinnerIds[0];
   broadcast(room);
   broadcastRooms();
 }
@@ -270,6 +312,7 @@ io.on('connection', (socket) => {
       player.returnedToLobby = false;
     }
     room.dueloTurnPlayerId = room.gameMode === 'DUELO' ? room.hostId : undefined;
+    room.roundWinnerId = undefined;
     const roundDurationMs = room.durationMinutes * 60 * 1000;
     room.phase = 'playing'; room.endsAt = Date.now() + (room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : roundDurationMs);
     if (room.gameMode === 'DUELO') startDueloTurn(room, room.hostId);
@@ -419,7 +462,7 @@ io.on('connection', (socket) => {
       broadcast(room);
       return;
     }
-    room.phase = 'lobby'; room.endsAt = null; room.solution = ''; room.solutions = []; room.dueloTurnPlayerId = undefined;
+    room.phase = 'lobby'; room.endsAt = null; room.solution = ''; room.solutions = []; room.dueloTurnPlayerId = undefined; room.roundWinnerId = undefined; room.roundWinnerIds = undefined;
     if (room.timer) clearTimeout(room.timer);
     room.timer = undefined;
     for (const participant of room.players.values()) {
