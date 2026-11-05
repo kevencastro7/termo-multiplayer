@@ -44,6 +44,11 @@ export function App() {
     if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
     noticeTimerRef.current = window.setTimeout(() => { setNotice(''); noticeTimerRef.current = null; }, 2800);
   }, []);
+  const clearNotice = useCallback(() => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = null;
+    setNotice('');
+  }, []);
   const [remaining, setRemaining] = useState(180);
   const [copied, setCopied] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
@@ -117,7 +122,7 @@ export function App() {
       socket.timeout(5000).emit('room:resume', { playerId: session.playerId, resumeToken: session.resumeToken }, (timeoutError, result) => {
         resumeInFlight.current = false;
         if (timeoutError) {
-          setNotice('Reconectando à sala…');
+          showNotice('Reconectando à sala…');
           if (socket.connected) window.setTimeout(resumeRoom, 1000);
           return;
         }
@@ -129,7 +134,7 @@ export function App() {
           setMatch(null);
           setRoomCode(session.code);
           setResuming(false);
-          setNotice(result.error);
+          showNotice(result.error);
           return;
         }
         if (result.state) {
@@ -144,7 +149,7 @@ export function App() {
           setMatch(result.state);
           setRemaining(Math.ceil(result.state.remainingMs / 1000));
           setResuming(false);
-          setNotice('');
+          clearNotice();
         }
       });
     };
@@ -156,11 +161,11 @@ export function App() {
         setActiveTile(0);
       }
     };
-    const onConnect = () => { setConnected(true); if (sessionRef.current) resumeRoom(); else setNotice(''); };
+    const onConnect = () => { setConnected(true); if (sessionRef.current) resumeRoom(); else clearNotice(); };
     const onDisconnect = (reason: string) => {
       setConnected(false);
-      if (sessionRef.current) setNotice('Conexão perdida. Tentando voltar à sala…');
-      else if (reason === 'io server disconnect') setNotice('Conexão encerrada pelo servidor.');
+      if (sessionRef.current) showNotice('Conexão perdida. Tentando voltar à sala…');
+      else if (reason === 'io server disconnect') showNotice('Conexão encerrada pelo servidor.');
     };
     const onConnectError = () => { setConnected(false); };
     const requestRooms = () => { if (socket.connected) socket.emit('rooms:list', setRooms); };
@@ -172,8 +177,8 @@ export function App() {
     setConnected(socket.connected);
     if (socket.connected) { resumeRoom(); requestRooms(); }
     else socket.connect();
-    return () => { document.removeEventListener('visibilitychange', onVisibility); socket.off('rooms:state', onRoomsState); socket.off('connect', requestRooms); socket.off('match:state', onState); socket.off('match:error', onGuessRejected); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
-  }, [showNotice, socket]);
+    return () => { document.removeEventListener('visibilitychange', onVisibility); if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current); socket.off('rooms:state', onRoomsState); socket.off('connect', requestRooms); socket.off('match:state', onState); socket.off('match:error', onGuessRejected); socket.off('match:notice', onError); socket.off('connect', onConnect); socket.off('disconnect', onDisconnect); socket.off('connect_error', onConnectError); socket.disconnect(); };
+  }, [clearNotice, showNotice, socket]);
 
   useEffect(() => {
     if (!match || !match.endsAt || match.phase !== 'playing') return;
@@ -225,10 +230,10 @@ export function App() {
 
   const persistName = () => { const value = name.trim() || 'Jogador'; setName(value); localStorage.setItem('termo-name', value); return value; };
   const createRoom = () => {
-    if (!socket.connected) { setNotice('Conectando ao servidor… tente novamente em alguns segundos.'); socket.connect(); return; }
+    if (!socket.connected) { showNotice('Conectando ao servidor… tente novamente em alguns segundos.'); socket.connect(); return; }
     socket.timeout(5000).emit('room:create', { name: persistName(), gameMode, durationMinutes, sequenceLength, dueloTurnSeconds }, (timeoutError, result) => {
-      if (timeoutError) setNotice('O servidor não respondeu. Confira se npm run dev está rodando.');
-      else if (result.error) setNotice(result.error);
+      if (timeoutError) showNotice('O servidor não respondeu. Confira se npm run dev está rodando.');
+      else if (result.error) showNotice(result.error);
     else if (result.code && result.playerId && result.resumeToken) {
       const session = { code: result.code, playerId: result.playerId, resumeToken: result.resumeToken };
       sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session)); setRoomCode(result.code);
@@ -236,10 +241,10 @@ export function App() {
     });
   };
   const joinRoom = () => {
-    if (!socket.connected) { setNotice('Sem conexão com o servidor. Confira se npm run dev está rodando.'); socket.connect(); return; }
+    if (!socket.connected) { showNotice('Sem conexão com o servidor. Confira se npm run dev está rodando.'); socket.connect(); return; }
     socket.timeout(5000).emit('room:join', { code: roomCode, name: persistName() }, (timeoutError, result) => {
-      if (timeoutError) setNotice('O servidor não respondeu. Tente novamente.');
-      else if (result.error) setNotice(result.error);
+      if (timeoutError) showNotice('O servidor não respondeu. Tente novamente.');
+      else if (result.error) showNotice(result.error);
       else if (result.playerId && result.resumeToken) {
         const session = { code: roomCode, playerId: result.playerId, resumeToken: result.resumeToken };
         sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -275,7 +280,7 @@ export function App() {
 
   const submitGuess = useCallback(() => {
     if (!match || match.phase !== 'playing' || match.players.find((p) => p.id === match.me)?.status !== 'playing' || (match.gameMode === 'SEQUENCIA' && (match.sequenceProgress?.[match.players.find((p) => p.id === match.me)?.wordIndex ?? 0]?.solved || (match.sequenceProgress?.[match.players.find((p) => p.id === match.me)?.wordIndex ?? 0]?.attempts ?? 0) >= match.guessLimit))) return;
-    if ([...draftRef.current].length !== 5) { setNotice('Preencha as cinco letras.'); return; }
+    if ([...draftRef.current].length !== 5) { showNotice('Preencha as cinco letras.'); return; }
     socket.emit('guess:submit', { word: draftRef.current }); setDraft(''); draftRef.current = ''; setActiveTile(0);
   }, [match, socket]);
 
@@ -311,7 +316,7 @@ export function App() {
     if (!match) return;
     const link = `${location.origin}/?room=${match.code}`;
     try { await navigator.clipboard.writeText(link); setCopied(true); window.setTimeout(() => setCopied(false), 1800); }
-    catch { setNotice(`Compartilhe o código ${match.code}`); }
+    catch { showNotice(`Compartilhe o código ${match.code}`); }
   };
 
   const boardCount = match?.gameMode === 'QUARTETO' || match?.gameMode === 'QUARTETO_SEQUENCIAL' ? 4 : match?.gameMode === 'DUETO' ? 2 : 1;
@@ -391,7 +396,7 @@ export function App() {
       {rooms.length === 0 ? <p className="rooms-empty">Nenhuma sala por aqui ainda. Crie a primeira!</p> : <div className="available-room-list">{rooms.map((room) => {
         const full = room.playerCount >= room.capacity;
         const status = room.phase === 'lobby' ? 'No lobby' : room.phase === 'playing' ? 'Em partida' : 'Rodada encerrada';
-        return <button type="button" className="available-room" key={room.code} onClick={() => { setRoomCode(room.code); if (socket.connected) socket.timeout(5000).emit('room:join', { code: room.code, name: persistName() }, (timeoutError, result) => { if (timeoutError) setNotice('O servidor não respondeu. Tente novamente.'); else if (result.error) setNotice(result.error); else if (result.playerId && result.resumeToken) { const session = { code: room.code, playerId: result.playerId, resumeToken: result.resumeToken }; sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } }); else socket.connect(); }}>
+        return <button type="button" className="available-room" key={room.code} onClick={() => { setRoomCode(room.code); if (socket.connected) socket.timeout(5000).emit('room:join', { code: room.code, name: persistName() }, (timeoutError, result) => { if (timeoutError) showNotice('O servidor não respondeu. Tente novamente.'); else if (result.error) showNotice(result.error); else if (result.playerId && result.resumeToken) { const session = { code: room.code, playerId: result.playerId, resumeToken: result.resumeToken }; sessionRef.current = session; localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } }); else socket.connect(); }}>
           <span className="available-room-code">{room.code}</span><span className="available-room-meta"><span>{room.gameMode === 'QUARTETO_SEQUENCIAL' ? 'QUARTETO SEQUENCIAL' : room.gameMode} · {room.durationMinutes} {room.durationMinutes === 1 ? 'minuto' : 'minutos'}</span><span>{status} · {room.playerCount}/{room.capacity} jogadores</span></span><span className="available-room-action">{full ? 'Cheia' : 'Entrar ↗'}</span>
         </button>;
       })}</div>}
