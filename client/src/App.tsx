@@ -28,6 +28,11 @@ export function App() {
   );
   const [match, setMatch] = useState<MatchView | null>(null);
   const matchRef = useRef<MatchView | null>(match);
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
   const [name, setName] = useState(() => localStorage.getItem('termo-name') ?? '');
   const [roomCode, setRoomCode] = useState(() => new URLSearchParams(window.location.search).get('room')?.toUpperCase().slice(0, 5) ?? '');
   const [draft, setDraft] = useState('');
@@ -75,6 +80,9 @@ export function App() {
     const onState = (state: MatchView) => {
       const previousState = matchRef.current;
       const previousPhase = previousState?.phase;
+      if (previousPhase === 'lobby' && state.phase === 'playing') {
+        requestAnimationFrame(() => requestAnimationFrame(scrollToTop));
+      }
       if (previousPhase === 'lobby' && state.phase === 'playing' && 'vibrate' in navigator) navigator.vibrate([80, 40, 120]);
       const previousMe = previousState?.players.find((player) => player.id === state.me);
       const currentMe = state.players.find((player) => player.id === state.me);
@@ -126,6 +134,9 @@ export function App() {
         }
         if (result.state) {
           const previousPhase = matchRef.current?.phase;
+          if (previousPhase === 'lobby' && result.state.phase === 'playing') {
+            requestAnimationFrame(() => requestAnimationFrame(scrollToTop));
+          }
           if ((previousPhase === 'playing' && result.state.phase === 'finished') || (previousPhase === 'finished' && result.state.phase === 'lobby')) {
             setDraft(''); draftRef.current = ''; setActiveTile(0);
           }
