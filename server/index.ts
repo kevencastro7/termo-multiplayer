@@ -311,11 +311,13 @@ io.on('connection', (socket) => {
       player.status = 'playing';
       player.returnedToLobby = false;
     }
-    room.dueloTurnPlayerId = room.gameMode === 'DUELO' ? room.hostId : undefined;
+    const dueloPlayers = room.gameMode === 'DUELO' ? [...room.players.keys()] : [];
+    const firstDueloPlayerId = dueloPlayers.length ? dueloPlayers[randomInt(dueloPlayers.length)] : undefined;
+    room.dueloTurnPlayerId = firstDueloPlayerId;
     room.roundWinnerId = undefined;
     const roundDurationMs = room.durationMinutes * 60 * 1000;
     room.phase = 'playing'; room.endsAt = Date.now() + (room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : roundDurationMs);
-    if (room.gameMode === 'DUELO') startDueloTurn(room, room.hostId);
+    if (room.gameMode === 'DUELO' && firstDueloPlayerId) startDueloTurn(room, firstDueloPlayerId);
     else room.timer = setTimeout(() => finish(room), roundDurationMs);
     broadcast(room);
     broadcastRooms();
