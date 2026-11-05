@@ -37,6 +37,8 @@ export function App() {
   const [roomCode, setRoomCode] = useState(() => new URLSearchParams(window.location.search).get('room')?.toUpperCase().slice(0, 5) ?? '');
   const [draft, setDraft] = useState('');
   const [activeTile, setActiveTile] = useState(0);
+  const [invalidGuessAt, setInvalidGuessAt] = useState(0);
+  const invalidGuessAtRef = useRef(0);
   const [notice, setNotice] = useState('');
   const noticeTimerRef = useRef<number | null>(null);
   const showNotice = useCallback((message: string) => {
@@ -91,6 +93,12 @@ export function App() {
       if (previousPhase === 'lobby' && state.phase === 'playing' && 'vibrate' in navigator) navigator.vibrate([80, 40, 120]);
       const previousMe = previousState?.players.find((player) => player.id === state.me);
       const currentMe = state.players.find((player) => player.id === state.me);
+      const previousGuessCount = previousState?.guesses.length ?? 0;
+      const currentGuessCount = state.guesses.length;
+      const acceptedGuess = state.phase === 'playing' && currentGuessCount > previousGuessCount;
+      if (acceptedGuess) {
+        setDraft(''); draftRef.current = ''; setActiveTile(0);
+      }
       if (state.phase === 'playing' && state.gameMode === 'DUELO' && previousMe?.id === previousState?.dueloTurnPlayerId && state.dueloTurnPlayerId !== previousState?.dueloTurnPlayerId) {
         setDraft(''); draftRef.current = ''; setActiveTile(0);
       }
@@ -155,10 +163,11 @@ export function App() {
     };
     const onGuessRejected = (message: string) => {
       showNotice(message);
-      if (message === 'Você já tentou essa palavra. Escolha outra.') {
-        draftRef.current = '';
-        setDraft('');
-        setActiveTile(0);
+      if (message === 'Você já tentou essa palavra. Escolha outra.' || message === 'Essa palavra não está no nosso dicionário.') {
+        const timestamp = Date.now();
+        invalidGuessAtRef.current = timestamp;
+        setInvalidGuessAt(timestamp);
+        if ('vibrate' in navigator) navigator.vibrate([45, 35, 45]);
       }
     };
     const onConnect = () => { setConnected(true); if (sessionRef.current) resumeRoom(); else clearNotice(); };
@@ -281,7 +290,7 @@ export function App() {
   const submitGuess = useCallback(() => {
     if (!match || match.phase !== 'playing' || match.players.find((p) => p.id === match.me)?.status !== 'playing' || (match.gameMode === 'SEQUENCIA' && (match.sequenceProgress?.[match.players.find((p) => p.id === match.me)?.wordIndex ?? 0]?.solved || (match.sequenceProgress?.[match.players.find((p) => p.id === match.me)?.wordIndex ?? 0]?.attempts ?? 0) >= match.guessLimit))) return;
     if ([...draftRef.current].length !== 5) { showNotice('Preencha as cinco letras.'); return; }
-    socket.emit('guess:submit', { word: draftRef.current }); setDraft(''); draftRef.current = ''; setActiveTile(0);
+    socket.emit('guess:submit', { word: draftRef.current });
   }, [match, socket]);
 
   const submitGuessRef = useRef(submitGuess);
@@ -464,7 +473,12 @@ export function App() {
           const activeRow = !guess && canGuess && (sequentialQuarteto ? boardIndex === quartetoActiveBoard && !activeBoardSolved : !solvedBoards[boardIndex]) && boardRevealed && row === visibleGuesses.length;
           const revealedGuess = guess?.revealedWord ?? guess?.word;
           const letters = guess && result ? [...(revealedGuess ?? guess.word)] : activeRow ? [...draft.padEnd(5, ' ')] : [];
-          return <div className={`board-row ${activeRow ? 'active-row' : ''} ${boardSolvedAtRow ? 'board-row-solved' : ''}`} key={row}>{Array.from({ length: 5 }, (_, col) => {
+          return <div className={`board-row ${activeRow ? 'active-row' : ''} ${activeRow && invalidGuessAt > 0 && invalidGuessAt === invalidGuessAtRef.current ? 'board-row-shake' : ''} ${boardSolvedAtRow ? 'board-row-solved' : ''}`} onAnimationEnd={(event) => {
+            if (event.target === event.currentTarget && invalidGuessAt > 0) {
+              invalidGuessAtRef.current = 0;
+              setInvalidGuessAt(0);
+            }
+          }} key={row}>{Array.from({ length: 5 }, (_, col) => {
             const letter = letters[col] === ' ' ? '' : letters[col] ?? '';
             const status = result?.[col]; const isActive = activeRow && col === activeTile;
             return <button type="button" aria-label={`Palavra ${boardIndex + 1}, tentativa ${row + 1}, letra ${col + 1}${letter ? `: ${letter}` : ', vazia'}`} aria-pressed={!!isActive} className={`tile ${status ? `tile-${status}` : ''} ${letter && !status ? 'tile-filled' : ''} ${isActive ? 'tile-selected' : ''}`} key={col} onClick={() => { if (activeRow) setActiveTile(col); }}>{letter}</button>;
