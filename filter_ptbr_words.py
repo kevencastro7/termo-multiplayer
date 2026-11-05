@@ -79,11 +79,11 @@ def load_banned_words(path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--max-icf", type=float, default=8.0,
+    parser.add_argument("--max-icf", type=float, default=50.0,
                         help="keep words with ICF <= this value (default: 8)")
     parser.add_argument("--length", type=int, default=5,
                         help="keep words of exactly this many letters (default: 5)")
-    parser.add_argument("--output", default="palavras_comuns_5_letras.txt")
+    parser.add_argument("--output", default="filtered-portuguese-words.txt")
     parser.add_argument(
         "--banned-words",
         default=str(Path(__file__).with_name("palavras_proibidas.txt")),
