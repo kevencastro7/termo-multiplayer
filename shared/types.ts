@@ -1,6 +1,7 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
 export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'QUARTETO_SEQUENCIAL' | 'SEQUENCIA' | 'DUELO' | 'BATTLE_ROYALE' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
+export interface BattleWordView { word: string; round: number; skipped: boolean }
 export interface PublicPlayer {
   id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number;
   isHost: boolean; rank?: number; wins: number; returnedToLobby?: boolean;
@@ -14,7 +15,7 @@ export interface MatchView {
   roundWinnerIds?: string[];
   quartetoRevealedBoards?: number;
   guesses: GuessView[]; sequenceProgress?: Array<{ guesses: GuessView[]; attempts: number; solved: boolean }>; endsAt: number | null; remainingMs: number; winsRanking: PublicPlayer[]; guessLimit: number;
-  solution?: string; solutions?: string[]; ranking?: PublicPlayer[]; me: string;
+  solution?: string; solutions?: string[]; battleWords?: BattleWordView[]; ranking?: PublicPlayer[]; me: string;
 }
 export interface RoomSummary { code: string; playerCount: number; capacity: number; phase: RoomPhase; gameMode: GameMode; durationMinutes: number }
 export type RoomPhase = MatchView['phase'];

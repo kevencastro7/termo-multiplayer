@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Server, Socket } from 'socket.io';
-import type { ClientToServerEvents, GameMode, MatchView, PublicPlayer, RoomSummary, ServerToClientEvents, TileStatus } from '../shared/types';
+import type { BattleWordView, ClientToServerEvents, GameMode, MatchView, PublicPlayer, RoomSummary, ServerToClientEvents, TileStatus } from '../shared/types';
 import { WordService } from './wordService';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -25,7 +25,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { 
 interface Guess { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord: string }
 interface SequenceWordState { guesses: Guess[]; attempts: number; solved: boolean }
 interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number; battleOutOfGuesses?: boolean; elapsedMs?: number; wins: number; returnedToLobby: boolean; wordsSolved: number; wordIndex: number; quartetoWordIndex: number; sequenceStartedAt?: number; sequenceElapsedMs?: number; currentSolution?: string; sequenceWords: string[]; sequenceProgress: SequenceWordState[] }
-interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; roundWinnerId?: string; roundWinnerIds?: string[]; battleRound: number; battlePlacements: Map<string, number>; battleUsedWords: Set<string>; timer?: NodeJS.Timeout }
+interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; roundWinnerId?: string; roundWinnerIds?: string[]; battleRound: number; battlePlacements: Map<string, number>; battleUsedWords: Set<string>; battleWords: BattleWordView[]; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
@@ -116,7 +116,7 @@ function state(room: Room, playerId: string): MatchView {
     players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g, results: g.results?.map((result) => result ? [...result] : null) })), ...(room.gameMode === 'SEQUENCIA' ? { sequenceProgress: player.sequenceProgress.map((word) => ({ guesses: word.guesses.map((guess) => ({ ...guess })), attempts: word.attempts, solved: word.solved })) } : {}), endsAt: room.endsAt,
     remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : room.durationMinutes * 60 * 1000, winsRanking,
-    me: playerId, ...(reveal ? { solution: room.gameMode === 'SEQUENCIA' ? room.solutions.at(-1) : room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ranking } : {}),
+    me: playerId, ...(reveal ? { solution: room.gameMode === 'SEQUENCIA' ? room.solutions.at(-1) : room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ...(room.gameMode === 'BATTLE_ROYALE' ? { battleWords: room.battleWords.map((entry) => ({ ...entry })) } : {}), ranking } : {}),
   };
 }
 function broadcast(room: Room): void {
@@ -141,6 +141,7 @@ function startBattleRound(room: Room, advanceRound = true): void {
   if (advanceRound) room.battleRound++;
   room.solution = nextSolution;
   room.battleUsedWords.add(nextSolution);
+  room.battleWords.push({ word: nextSolution, round: room.battleRound, skipped: false });
   room.solutions = [room.solution];
   for (const player of room.players.values()) {
     if (player.status === 'lost' || player.status === 'waiting') continue;
@@ -156,7 +157,11 @@ function resolveBattleRound(room: Room, timedOut = false): void {
   const active = [...room.players.values()].filter((player) => player.status !== 'lost' && player.status !== 'waiting');
   const solved = active.filter((player) => player.status === 'won');
   const unsolved = active.filter((player) => player.status !== 'won');
-  if (solved.length === 0 && (timedOut || unsolved.every((player) => player.battleOutOfGuesses))) { startBattleRound(room, false); return; }
+  if (solved.length === 0 && (timedOut || unsolved.every((player) => player.battleOutOfGuesses))) {
+    const currentWord = room.battleWords.at(-1);
+    if (currentWord) currentWord.skipped = true;
+    startBattleRound(room, false); return;
+  }
   const eliminated: Player[] = [];
   if (solved.length > 0 && unsolved.length === 1 && active.length > 1) {
     unsolved[0].status = 'lost'; unsolved[0].eliminationRound = room.battleRound; room.battlePlacements.set(unsolved[0].id, active.length);
@@ -269,7 +274,7 @@ io.on('connection', (socket) => {
     const resumeToken = randomBytes(32).toString('base64url');
     const requestedSequenceLength = sequenceLength ?? 3;
     if (!Number.isInteger(requestedSequenceLength) || requestedSequenceLength < 2 || requestedSequenceLength > 10) return callback({ error: 'A sequência deve ter de 2 a 10 palavras.' });
-    const room: Room = { code: roomCode, hostId: playerId, solution: '', solutions: [], players: new Map(), phase: 'lobby', gameMode, durationMinutes, sequenceLength: requestedSequenceLength, dueloTurnSeconds: dueloTurnSeconds ?? 30, endsAt: null, battleRound: 0, battlePlacements: new Map(), battleUsedWords: new Set() };
+    const room: Room = { code: roomCode, hostId: playerId, solution: '', solutions: [], players: new Map(), phase: 'lobby', gameMode, durationMinutes, sequenceLength: requestedSequenceLength, dueloTurnSeconds: dueloTurnSeconds ?? 30, endsAt: null, battleRound: 0, battlePlacements: new Map(), battleUsedWords: new Set(), battleWords: [] };
     const player: Player = { id: playerId, resumeToken, name: name.trim().slice(0, 18) || 'Jogador', socketId: socket.id, attempts: 0, guesses: [], status: 'playing', wins: 0, returnedToLobby: false, wordsSolved: 0, wordIndex: 0, quartetoWordIndex: 0, sequenceWords: [], sequenceProgress: [] };
     room.players.set(player.id, player); rooms.set(roomCode, room); socketRoom.set(socket.id, roomCode); socket.join(roomCode);
     callback({ code: roomCode, playerId, resumeToken }); broadcast(room); broadcastRooms();
@@ -338,7 +343,7 @@ io.on('connection', (socket) => {
     if (room.hostId !== playerId) return socket.emit('match:error', 'Somente o anfitrião pode iniciar a partida.');
     if (room.gameMode === 'BATTLE_ROYALE' && room.players.size < 3) return socket.emit('match:error', `BATTLE ROYALE precisa de pelo menos 3 jogadores. Atualmente há ${room.players.size}.`);
     if (room.gameMode === 'DUELO' && room.players.size !== 2) return socket.emit('match:error', `DUELO precisa de exatamente 2 jogadores para começar. Atualmente há ${room.players.size}.`);
-    room.battleRound = 0; room.battlePlacements.clear(); room.battleUsedWords.clear();
+    room.battleRound = 0; room.battlePlacements.clear(); room.battleUsedWords.clear(); room.battleWords = [];
     room.solutions = room.gameMode === 'SEQUENCIA' ? [] : [WordService.getRandomWord()];
     const boardCount = room.gameMode === 'QUARTETO' || room.gameMode === 'QUARTETO_SEQUENCIAL' ? 4 : room.gameMode === 'DUETO' ? 2 : 1;
     while (room.gameMode !== 'SEQUENCIA' && room.solutions.length < boardCount) {
@@ -407,7 +412,11 @@ io.on('connection', (socket) => {
       const active = [...room.players.values()].filter((participant) => participant.status !== 'lost' && participant.status !== 'waiting');
       const solved = active.filter((participant) => participant.status === 'won');
       const stillGuessing = active.filter((participant) => participant.status === 'playing' && !participant.battleOutOfGuesses);
-      if (solved.length === 0 && stillGuessing.length === 0) { startBattleRound(room, false); return; }
+      if (solved.length === 0 && stillGuessing.length === 0) {
+        const currentWord = room.battleWords.at(-1);
+        if (currentWord) currentWord.skipped = true;
+        startBattleRound(room, false); return;
+      }
       if (solved.length > 0 && stillGuessing.length <= 1 && active.length > 1) { resolveBattleRound(room); return; }
       if (solved.length > 0 && stillGuessing.length === 0) { resolveBattleRound(room); return; }
       broadcast(room);
@@ -545,7 +554,7 @@ io.on('connection', (socket) => {
       broadcast(room);
       return;
     }
-    room.phase = 'lobby'; room.endsAt = null; room.battleRound = 0; room.battlePlacements.clear(); room.battleUsedWords.clear(); room.solution = ''; room.solutions = []; room.dueloTurnPlayerId = undefined; room.roundWinnerId = undefined; room.roundWinnerIds = undefined;
+    room.phase = 'lobby'; room.endsAt = null; room.battleRound = 0; room.battlePlacements.clear(); room.battleUsedWords.clear(); room.battleWords = []; room.solution = ''; room.solutions = []; room.dueloTurnPlayerId = undefined; room.roundWinnerId = undefined; room.roundWinnerIds = undefined;
     if (room.timer) clearTimeout(room.timer);
     room.timer = undefined;
     for (const participant of room.players.values()) {
