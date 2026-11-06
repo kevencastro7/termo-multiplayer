@@ -1,14 +1,14 @@
 export type TileStatus = 'correct' | 'present' | 'absent';
-export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'QUARTETO_SEQUENCIAL' | 'SEQUENCIA' | 'DUELO' | (string & {});
+export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'QUARTETO_SEQUENCIAL' | 'SEQUENCIA' | 'DUELO' | 'BATTLE_ROYALE' | (string & {});
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface PublicPlayer {
-  id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting';
+  id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number;
   isHost: boolean; rank?: number; wins: number; returnedToLobby?: boolean;
   guessesUsed?: number; sequenceGuessesUsed?: number; elapsedMs?: number; wordsSolved?: number; wordIndex?: number; wordCount?: number;
 }
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
-  gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number;
+  gameMode: GameMode; durationMinutes: number; battleRound?: number; sequenceLength: number; dueloTurnSeconds: number;
   dueloTurnPlayerId?: string;
   roundWinnerId?: string;
   roundWinnerIds?: string[];

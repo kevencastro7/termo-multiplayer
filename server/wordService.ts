@@ -39,6 +39,12 @@ export class WordService {
     const words = this.targetWords!;
     return words[Math.floor(Math.random() * words.length)];
   }
+  static getRandomWordExcluding(excludedWords: ReadonlySet<string>): string | undefined {
+    this.load();
+    const available = this.targetWords!.filter((word) => !excludedWords.has(word));
+    if (!available.length) return undefined;
+    return available[Math.floor(Math.random() * available.length)];
+  }
   static score(guess: string, solution: string): ('correct' | 'present' | 'absent')[] {
     const g = [...this.normalizeWord(guess)];
     const s = [...this.normalizeWord(solution)];
