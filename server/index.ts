@@ -151,7 +151,7 @@ function startBattleRound(room: Room, advanceRound = true): void {
   room.timer = setTimeout(() => resolveBattleRound(room, true), room.durationMinutes * 60 * 1000);
   broadcast(room);
 }
-function resolveBattleRound(room: Room, timedOut = false): void {
+function resolveBattleRound(room: Room, timedOut = false, priorEliminations: Player[] = []): void {
   if (room.phase !== 'playing' || room.gameMode !== 'BATTLE_ROYALE') return;
   if (room.timer) clearTimeout(room.timer);
   const active = [...room.players.values()].filter((player) => player.status !== 'lost' && player.status !== 'waiting');
@@ -162,14 +162,15 @@ function resolveBattleRound(room: Room, timedOut = false): void {
     if (currentWord) currentWord.skipped = true;
     startBattleRound(room, false); return;
   }
-  const eliminated: Player[] = [];
+  const eliminated: Player[] = [...priorEliminations];
   if (solved.length > 0 && unsolved.length === 1 && active.length > 1) {
     unsolved[0].status = 'lost'; unsolved[0].eliminationRound = room.battleRound; unsolved[0].eliminationWord = room.solution; room.battlePlacements.set(unsolved[0].id, active.length);
     eliminated.push(unsolved[0]);
   } else if (timedOut && solved.length > 0) {
     for (const player of unsolved) { player.status = 'lost'; player.eliminationRound = room.battleRound; player.eliminationWord = room.solution; room.battlePlacements.set(player.id, active.length); eliminated.push(player); }
   }
-  for (const player of eliminated) io.to(room.code).emit('match:notice', `${player.name} foi eliminado no round ${room.battleRound}.`);
+  if (eliminated.length === 1) io.to(room.code).emit('match:notice', `${eliminated[0].name} foi eliminado no round ${room.battleRound}.`);
+  else if (eliminated.length > 1) io.to(room.code).emit('match:notice', `${eliminated.map((player) => player.name).join(', ')} foram eliminados no round ${room.battleRound}.`);
   const remaining = [...room.players.values()].filter((player) => player.status !== 'lost' && player.status !== 'waiting');
   if (remaining.length <= 1) {
     if (remaining[0]) room.battlePlacements.set(remaining[0].id, 1);
@@ -526,11 +527,10 @@ io.on('connection', (socket) => {
       player.eliminationRound = room.battleRound;
       player.eliminationWord = room.solution;
       room.battlePlacements.set(player.id, [...room.players.values()].filter((participant) => participant.status !== 'lost' && participant.status !== 'waiting').length + 1);
-      io.to(room.code).emit('match:notice', `${player.name} foi eliminado no round ${room.battleRound}.`);
     }
     broadcast(room);
     const activePlayers = [...room.players.values()].filter((participant) => participant.status !== 'waiting');
-    if (room.gameMode === 'BATTLE_ROYALE') resolveBattleRound(room);
+    if (room.gameMode === 'BATTLE_ROYALE') resolveBattleRound(room, false, [player]);
     else if (activePlayers.length > 0 && activePlayers.every((participant) => participant.status !== 'playing')) finish(room);
   });
   socket.on('match:select-word', ({ wordIndex }) => {
