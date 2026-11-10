@@ -113,7 +113,7 @@ function state(room: Room, playerId: string): MatchView {
   const winsRanking = [...room.players.values()].map((participant) => ({ ...publicPlayer(participant), isHost: participant.id === room.hostId })).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
   return {
     code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, battleRound: room.gameMode === 'BATTLE_ROYALE' ? room.battleRound : undefined, sequenceLength: room.sequenceLength, dueloTurnSeconds: room.dueloTurnSeconds, dueloTurnPlayerId: room.gameMode === 'DUELO' ? room.dueloTurnPlayerId : undefined, roundWinnerId: reveal ? room.roundWinnerId : undefined, roundWinnerIds: reveal ? room.roundWinnerIds : undefined, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
-    players: [...rankedPlayers, ...(player.status === 'waiting' ? [player] : [])].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
+    players: [...rankedPlayers, ...[...room.players.values()].filter((participant) => participant.status === 'waiting')].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g, results: g.results?.map((result) => result ? [...result] : null) })), ...(room.gameMode === 'SEQUENCIA' ? { sequenceProgress: player.sequenceProgress.map((word) => ({ guesses: word.guesses.map((guess) => ({ ...guess })), attempts: word.attempts, solved: word.solved })) } : {}), endsAt: room.endsAt,
     remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : room.durationMinutes * 60 * 1000, winsRanking,
     me: playerId, ...(reveal ? { solution: room.gameMode === 'SEQUENCIA' ? room.solutions.at(-1) : room.solution, ...(room.gameMode !== 'TERMO' ? { solutions: [...room.solutions] } : {}), ...(room.gameMode === 'BATTLE_ROYALE' ? { battleWords: room.battleWords.map((entry) => ({ ...entry })) } : {}), ranking } : {}),
@@ -352,7 +352,6 @@ io.on('connection', (socket) => {
     }
     room.solution = room.solutions[0];
     for (const player of room.players.values()) {
-      if (room.gameMode === 'BATTLE_ROYALE' && player.status === 'waiting') continue;
       player.eliminationRound = undefined;
       player.attempts = 0; player.guesses = []; player.elapsedMs = undefined; player.quartetoWordIndex = 0;
       player.battleOutOfGuesses = false;
