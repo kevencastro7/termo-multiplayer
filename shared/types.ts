@@ -3,7 +3,7 @@ export type GameMode = 'TERMO' | 'DUETO' | 'QUARTETO' | 'QUARTETO_SEQUENCIAL' | 
 export interface GuessView { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord?: string }
 export interface BattleWordView { word: string; round: number; skipped: boolean }
 export interface PublicPlayer {
-  id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number;
+  id: string; name: string; attempts: number; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number; eliminationWord?: string;
   isHost: boolean; rank?: number; wins: number; returnedToLobby?: boolean;
   guessesUsed?: number; sequenceGuessesUsed?: number; elapsedMs?: number; wordsSolved?: number; wordIndex?: number; wordCount?: number;
 }

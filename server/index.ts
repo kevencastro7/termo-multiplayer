@@ -24,7 +24,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { 
 
 interface Guess { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord: string }
 interface SequenceWordState { guesses: Guess[]; attempts: number; solved: boolean }
-interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number; battleOutOfGuesses?: boolean; elapsedMs?: number; wins: number; returnedToLobby: boolean; wordsSolved: number; wordIndex: number; quartetoWordIndex: number; sequenceStartedAt?: number; sequenceElapsedMs?: number; currentSolution?: string; sequenceWords: string[]; sequenceProgress: SequenceWordState[] }
+interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number; eliminationWord?: string; battleOutOfGuesses?: boolean; elapsedMs?: number; wins: number; returnedToLobby: boolean; wordsSolved: number; wordIndex: number; quartetoWordIndex: number; sequenceStartedAt?: number; sequenceElapsedMs?: number; currentSolution?: string; sequenceWords: string[]; sequenceProgress: SequenceWordState[] }
 interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; roundWinnerId?: string; roundWinnerIds?: string[]; battleRound: number; battlePlacements: Map<string, number>; battleUsedWords: Set<string>; battleWords: BattleWordView[]; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
@@ -41,7 +41,7 @@ function code(): string {
   return value;
 }
 function publicPlayer(player: Player, reveal = false, roundStartedAt?: number): PublicPlayer {
-  return { id: player.id, name: player.name, attempts: player.attempts, status: player.status, eliminationRound: player.eliminationRound, wins: player.wins, returnedToLobby: player.returnedToLobby,
+  return { id: player.id, name: player.name, attempts: player.attempts, status: player.status, eliminationRound: player.eliminationRound, eliminationWord: player.eliminationWord, wins: player.wins, returnedToLobby: player.returnedToLobby,
     wordsSolved: player.wordsSolved, wordIndex: player.wordIndex,
     isHost: false,
     ...(player.status === 'won' || (reveal && player.status !== 'playing') ? { guessesUsed: player.attempts, elapsedMs: player.elapsedMs ?? (roundStartedAt ? Date.now() - roundStartedAt : undefined) } : {}) };
@@ -164,10 +164,10 @@ function resolveBattleRound(room: Room, timedOut = false): void {
   }
   const eliminated: Player[] = [];
   if (solved.length > 0 && unsolved.length === 1 && active.length > 1) {
-    unsolved[0].status = 'lost'; unsolved[0].eliminationRound = room.battleRound; room.battlePlacements.set(unsolved[0].id, active.length);
+    unsolved[0].status = 'lost'; unsolved[0].eliminationRound = room.battleRound; unsolved[0].eliminationWord = room.solution; room.battlePlacements.set(unsolved[0].id, active.length);
     eliminated.push(unsolved[0]);
   } else if (timedOut && solved.length > 0) {
-    for (const player of unsolved) { player.status = 'lost'; player.eliminationRound = room.battleRound; room.battlePlacements.set(player.id, active.length); eliminated.push(player); }
+    for (const player of unsolved) { player.status = 'lost'; player.eliminationRound = room.battleRound; player.eliminationWord = room.solution; room.battlePlacements.set(player.id, active.length); eliminated.push(player); }
   }
   for (const player of eliminated) io.to(room.code).emit('match:notice', `${player.name} foi eliminado no round ${room.battleRound}.`);
   const remaining = [...room.players.values()].filter((player) => player.status !== 'lost' && player.status !== 'waiting');
@@ -524,6 +524,7 @@ io.on('connection', (socket) => {
     } else player.status = 'lost';
     if (room.gameMode === 'BATTLE_ROYALE') {
       player.eliminationRound = room.battleRound;
+      player.eliminationWord = room.solution;
       room.battlePlacements.set(player.id, [...room.players.values()].filter((participant) => participant.status !== 'lost' && participant.status !== 'waiting').length + 1);
       io.to(room.code).emit('match:notice', `${player.name} foi eliminado no round ${room.battleRound}.`);
     }
