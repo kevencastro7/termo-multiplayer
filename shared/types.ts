@@ -9,7 +9,7 @@ export interface PublicPlayer {
 }
 export interface MatchView {
   code: string; phase: 'lobby' | 'playing' | 'finished'; players: PublicPlayer[];
-  gameMode: GameMode; durationMinutes: number; battleRound?: number; sequenceLength: number; dueloTurnSeconds: number;
+  gameMode: GameMode; durationMinutes: number; battleRound?: number; countdownEndsAt?: number | null; sequenceLength: number; dueloTurnSeconds: number;
   dueloTurnPlayerId?: string;
   roundWinnerId?: string;
   roundWinnerIds?: string[];

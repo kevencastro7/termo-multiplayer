@@ -25,7 +25,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, { 
 interface Guess { word: string; result: TileStatus[]; results?: Array<TileStatus[] | null>; revealedWord: string }
 interface SequenceWordState { guesses: Guess[]; attempts: number; solved: boolean }
 interface Player { id: string; name: string; socketId: string | null; resumeToken: string; disconnectTimer?: NodeJS.Timeout; attempts: number; guesses: Guess[]; status: 'playing' | 'won' | 'lost' | 'waiting'; eliminationRound?: number; eliminationWord?: string; battleOutOfGuesses?: boolean; elapsedMs?: number; wins: number; returnedToLobby: boolean; wordsSolved: number; wordIndex: number; quartetoWordIndex: number; sequenceStartedAt?: number; sequenceElapsedMs?: number; currentSolution?: string; sequenceWords: string[]; sequenceProgress: SequenceWordState[] }
-interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; roundWinnerId?: string; roundWinnerIds?: string[]; battleRound: number; battlePlacements: Map<string, number>; battleUsedWords: Set<string>; battleWords: BattleWordView[]; timer?: NodeJS.Timeout }
+interface Room { code: string; hostId: string; solution: string; solutions: string[]; players: Map<string, Player>; phase: 'lobby' | 'playing' | 'finished'; gameMode: GameMode; durationMinutes: number; sequenceLength: number; dueloTurnSeconds: number; endsAt: number | null; dueloTurnPlayerId?: string; roundWinnerId?: string; roundWinnerIds?: string[]; battleRound: number; battlePlacements: Map<string, number>; battleUsedWords: Set<string>; battleWords: BattleWordView[]; countdownEndsAt?: number | null; timer?: NodeJS.Timeout }
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 const RECONNECT_GRACE_MS = 2 * 60 * 1000;
@@ -112,7 +112,7 @@ function state(room: Room, playerId: string): MatchView {
   const ranking = reveal ? rankedPlayers.map((participant) => ({ ...publicPlayer(participant, true, roundStartedAt), ...(room.gameMode === 'SEQUENCIA' ? { sequenceGuessesUsed: sequenceGuessesUsed(participant), elapsedMs: participant.sequenceElapsedMs } : room.gameMode === 'QUARTETO_SEQUENCIAL' ? { wordsSolved: participant.wordsSolved } : room.gameMode === 'DUETO' || room.gameMode === 'QUARTETO' ? { wordsSolved: solvedBoardCount(participant, boardCount) } : {}), isHost: participant.id === room.hostId, rank: finalRanks.get(participant.id)! })) : undefined;
   const winsRanking = [...room.players.values()].map((participant) => ({ ...publicPlayer(participant), isHost: participant.id === room.hostId })).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
   return {
-    code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, battleRound: room.gameMode === 'BATTLE_ROYALE' ? room.battleRound : undefined, sequenceLength: room.sequenceLength, dueloTurnSeconds: room.dueloTurnSeconds, dueloTurnPlayerId: room.gameMode === 'DUELO' ? room.dueloTurnPlayerId : undefined, roundWinnerId: reveal ? room.roundWinnerId : undefined, roundWinnerIds: reveal ? room.roundWinnerIds : undefined, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
+    code: room.code, phase: room.phase, gameMode: room.gameMode, durationMinutes: room.durationMinutes, battleRound: room.gameMode === 'BATTLE_ROYALE' ? room.battleRound : undefined, countdownEndsAt: room.countdownEndsAt ?? null, sequenceLength: room.sequenceLength, dueloTurnSeconds: room.dueloTurnSeconds, dueloTurnPlayerId: room.gameMode === 'DUELO' ? room.dueloTurnPlayerId : undefined, roundWinnerId: reveal ? room.roundWinnerId : undefined, roundWinnerIds: reveal ? room.roundWinnerIds : undefined, quartetoRevealedBoards: room.gameMode === 'QUARTETO_SEQUENCIAL' ? (reveal ? 4 : Math.min(4, player.quartetoWordIndex + 1)) : undefined, guessLimit,
     players: [...rankedPlayers, ...[...room.players.values()].filter((participant) => participant.status === 'waiting')].map((participant) => ({ ...publicPlayer(participant, reveal, roundStartedAt), isHost: participant.id === room.hostId, ...(reveal ? { rank: finalRanks.get(participant.id) } : participant.status === 'won' ? { rank: rankedPlayers.filter((candidate) => candidate.status === 'won').findIndex((candidate) => candidate.id === participant.id) + 1 } : {}) })),
     guesses: player.guesses.map((g) => ({ ...g, results: g.results?.map((result) => result ? [...result] : null) })), ...(room.gameMode === 'SEQUENCIA' ? { sequenceProgress: player.sequenceProgress.map((word) => ({ guesses: word.guesses.map((guess) => ({ ...guess })), attempts: word.attempts, solved: word.solved })) } : {}), endsAt: room.endsAt,
     remainingMs: room.endsAt ? Math.max(0, room.endsAt - Date.now()) : room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : room.durationMinutes * 60 * 1000, winsRanking,
@@ -135,6 +135,7 @@ function startDueloTurn(room: Room, playerId: string): void {
   }, room.dueloTurnSeconds * 1000);
 }
 function startBattleRound(room: Room, advanceRound = true): void {
+  room.countdownEndsAt = null;
   if (room.timer) clearTimeout(room.timer);
   const nextSolution = WordService.getRandomWordExcluding(room.battleUsedWords);
   if (!nextSolution) { finish(room); return; }
@@ -151,6 +152,12 @@ function startBattleRound(room: Room, advanceRound = true): void {
   room.timer = setTimeout(() => resolveBattleRound(room, true), room.durationMinutes * 60 * 1000);
   broadcast(room);
 }
+function queueBattleRound(room: Room, advanceRound = true): void {
+  if (room.timer) clearTimeout(room.timer);
+  room.countdownEndsAt = Date.now() + 3000;
+  broadcast(room);
+  room.timer = setTimeout(() => startBattleRound(room, advanceRound), 3000);
+}
 function resolveBattleRound(room: Room, timedOut = false, priorEliminations: Player[] = []): void {
   if (room.phase !== 'playing' || room.gameMode !== 'BATTLE_ROYALE') return;
   if (room.timer) clearTimeout(room.timer);
@@ -160,7 +167,7 @@ function resolveBattleRound(room: Room, timedOut = false, priorEliminations: Pla
   if (solved.length === 0 && (timedOut || unsolved.every((player) => player.battleOutOfGuesses))) {
     const currentWord = room.battleWords.at(-1);
     if (currentWord) currentWord.skipped = true;
-    startBattleRound(room, false); return;
+    queueBattleRound(room, false); return;
   }
   const eliminated: Player[] = [...priorEliminations];
   if (solved.length > 0 && unsolved.length === 1 && active.length > 1) {
@@ -176,7 +183,7 @@ function resolveBattleRound(room: Room, timedOut = false, priorEliminations: Pla
     if (remaining[0]) room.battlePlacements.set(remaining[0].id, 1);
     finish(room); return;
   }
-  startBattleRound(room);
+  queueBattleRound(room);
 }
 function finish(room: Room): void {
   if (room.phase !== 'playing') return;
@@ -377,17 +384,26 @@ io.on('connection', (socket) => {
     room.dueloTurnPlayerId = firstDueloPlayerId;
     room.roundWinnerId = undefined;
     const roundDurationMs = room.durationMinutes * 60 * 1000;
-    room.phase = 'playing'; room.endsAt = Date.now() + (room.gameMode === 'DUELO' ? room.dueloTurnSeconds * 1000 : roundDurationMs);
-    if (room.gameMode === 'BATTLE_ROYALE') startBattleRound(room);
-    else if (room.gameMode === 'DUELO' && firstDueloPlayerId) startDueloTurn(room, firstDueloPlayerId);
-    else room.timer = setTimeout(() => finish(room), roundDurationMs);
+    room.phase = 'playing'; room.endsAt = null; room.countdownEndsAt = Date.now() + 3000;
+    room.timer = setTimeout(() => {
+      room.countdownEndsAt = null;
+      if (room.phase !== 'playing') return;
+      if (room.gameMode === 'BATTLE_ROYALE') startBattleRound(room);
+      else if (room.gameMode === 'DUELO' && firstDueloPlayerId) startDueloTurn(room, firstDueloPlayerId);
+      else {
+        if (room.gameMode === 'SEQUENCIA') for (const player of room.players.values()) player.sequenceStartedAt = Date.now();
+        room.endsAt = Date.now() + roundDurationMs;
+        room.timer = setTimeout(() => finish(room), roundDurationMs);
+        broadcast(room);
+      }
+    }, 3000);
     broadcast(room);
     broadcastRooms();
   });
   socket.on('guess:submit', ({ word }) => {
     const room = rooms.get(socketRoom.get(socket.id) ?? '');
     const player = room && [...room.players.values()].find((candidate) => candidate.socketId === socket.id);
-    if (!room || !player || room.phase !== 'playing' || player.status !== 'playing') return;
+    if (!room || !player || room.phase !== 'playing' || player.status !== 'playing' || (room.countdownEndsAt ?? 0) > Date.now()) return;
     if (room.gameMode === 'DUELO' && room.dueloTurnPlayerId !== player.id) return socket.emit('match:error', 'Aguarde sua vez.');
     if (room.endsAt! <= Date.now()) {
       if (room.gameMode === 'BATTLE_ROYALE') resolveBattleRound(room, true);
@@ -415,7 +431,7 @@ io.on('connection', (socket) => {
       if (solved.length === 0 && stillGuessing.length === 0) {
         const currentWord = room.battleWords.at(-1);
         if (currentWord) currentWord.skipped = true;
-        startBattleRound(room, false); return;
+        queueBattleRound(room, false); return;
       }
       if (solved.length > 0 && stillGuessing.length <= 1 && active.length > 1) { resolveBattleRound(room); return; }
       if (solved.length > 0 && stillGuessing.length === 0) { resolveBattleRound(room); return; }
@@ -554,7 +570,7 @@ io.on('connection', (socket) => {
       broadcast(room);
       return;
     }
-    room.phase = 'lobby'; room.endsAt = null; room.battleRound = 0; room.battlePlacements.clear(); room.battleUsedWords.clear(); room.battleWords = []; room.solution = ''; room.solutions = []; room.dueloTurnPlayerId = undefined; room.roundWinnerId = undefined; room.roundWinnerIds = undefined;
+    room.phase = 'lobby'; room.endsAt = null; room.countdownEndsAt = null; room.battleRound = 0; room.battlePlacements.clear(); room.battleUsedWords.clear(); room.battleWords = []; room.solution = ''; room.solutions = []; room.dueloTurnPlayerId = undefined; room.roundWinnerId = undefined; room.roundWinnerIds = undefined;
     if (room.timer) clearTimeout(room.timer);
     room.timer = undefined;
     for (const participant of room.players.values()) {
