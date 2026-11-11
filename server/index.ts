@@ -143,6 +143,7 @@ function startBattleRound(room: Room, advanceRound = true): void {
   room.solution = nextSolution;
   room.battleUsedWords.add(nextSolution);
   room.battleWords.push({ word: nextSolution, round: room.battleRound, skipped: false });
+  console.info(`[Battle Royale] Room ${room.code} started round ${room.battleRound}; word: ${nextSolution}`);
   room.solutions = [room.solution];
   for (const player of room.players.values()) {
     if (player.status === 'lost' || player.status === 'waiting') continue;
@@ -170,11 +171,14 @@ function resolveBattleRound(room: Room, timedOut = false, priorEliminations: Pla
     queueBattleRound(room, false); return;
   }
   const eliminated: Player[] = [...priorEliminations];
-  if (solved.length > 0 && unsolved.length === 1 && active.length > 1) {
-    unsolved[0].status = 'lost'; unsolved[0].eliminationRound = room.battleRound; unsolved[0].eliminationWord = room.solution; room.battlePlacements.set(unsolved[0].id, active.length);
-    eliminated.push(unsolved[0]);
-  } else if (timedOut && solved.length > 0) {
-    for (const player of unsolved) { player.status = 'lost'; player.eliminationRound = room.battleRound; player.eliminationWord = room.solution; room.battlePlacements.set(player.id, active.length); eliminated.push(player); }
+  if (solved.length > 0) {
+    const playersToEliminate = timedOut || unsolved.length === 1
+      ? unsolved
+      : unsolved.filter((player) => player.battleOutOfGuesses);
+    for (const player of playersToEliminate) {
+      player.status = 'lost'; player.eliminationRound = room.battleRound; player.eliminationWord = room.solution; room.battlePlacements.set(player.id, active.length);
+      eliminated.push(player);
+    }
   }
   if (eliminated.length === 1) io.to(room.code).emit('match:notice', `${eliminated[0].name} foi eliminado no round ${room.battleRound}.`);
   else if (eliminated.length > 1) io.to(room.code).emit('match:notice', `${eliminated.map((player) => player.name).join(', ')} foram eliminados no round ${room.battleRound}.`);
@@ -427,13 +431,14 @@ io.on('connection', (socket) => {
       else if (player.attempts >= guessLimitFor(room.gameMode)) player.battleOutOfGuesses = true;
       const active = [...room.players.values()].filter((participant) => participant.status !== 'lost' && participant.status !== 'waiting');
       const solved = active.filter((participant) => participant.status === 'won');
+      const unsolved = active.filter((participant) => participant.status !== 'won');
       const stillGuessing = active.filter((participant) => participant.status === 'playing' && !participant.battleOutOfGuesses);
       if (solved.length === 0 && stillGuessing.length === 0) {
         const currentWord = room.battleWords.at(-1);
         if (currentWord) currentWord.skipped = true;
         queueBattleRound(room, false); return;
       }
-      if (solved.length > 0 && stillGuessing.length <= 1 && active.length > 1) { resolveBattleRound(room); return; }
+      if (solved.length > 0 && unsolved.length === 1) { resolveBattleRound(room); return; }
       if (solved.length > 0 && stillGuessing.length === 0) { resolveBattleRound(room); return; }
       broadcast(room);
       return;
