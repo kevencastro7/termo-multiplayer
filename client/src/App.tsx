@@ -144,6 +144,7 @@ export function App() {
           return;
         }
         if (result.error) {
+          resumeInFlight.current = false;
           sessionRef.current = null;
           localStorage.removeItem(SESSION_KEY);
           sessionStorage.removeItem(SESSION_KEY);
@@ -199,8 +200,8 @@ export function App() {
   }, [clearNotice, showNotice, socket]);
 
   useEffect(() => {
-    if (!match || match.phase !== 'playing' || !match.countdownEndsAt) { setBattleCountdown(0); return; }
-    const updateCountdown = () => { const seconds = Math.max(0, Math.ceil((match.countdownEndsAt! - Date.now()) / 1000)); setBattleCountdown(seconds); };
+    if (!match || match.phase !== 'playing' || match.countdownEndsAt == null) { setBattleCountdown(0); return; }
+    const updateCountdown = () => { const seconds = Math.max(1, Math.ceil((match.countdownEndsAt! - Date.now()) / 1000)); setBattleCountdown(seconds); };
     updateCountdown(); const timer = window.setInterval(updateCountdown, 100); return () => window.clearInterval(timer);
   }, [match?.phase, match?.countdownEndsAt]);
   useEffect(() => {
@@ -533,7 +534,7 @@ export function App() {
         <div className="opponent-list">{match.players.map((p, i) => <div className={`opponent-row ${p.id === match.me ? 'is-me' : ''}`} key={p.id}><span className={`avatar avatar-${i % 5}`}>{p.name.slice(0, 1).toUpperCase()}</span><div className="opponent-info"><b>{p.name}{p.id === match.me && <small> (você)</small>}</b><span>{match.gameMode === 'BATTLE_ROYALE' && p.status === 'lost' ? `Eliminado no round ${p.eliminationRound ?? '—'}` : match.gameMode === 'BATTLE_ROYALE' && p.status === 'won' ? 'Palavra resolvida · salvo nesta rodada' : match.gameMode === 'SEQUENCIA' ? `${p.wordsSolved ?? 0}/${match.sequenceLength} palavras · ${p.status === 'playing' ? `Palavra ${Math.min((p.wordIndex ?? 0) + 1, match.sequenceLength)}` : p.status === 'won' ? 'Concluiu!' : 'Rodada encerrada'}` : p.status === 'won' ? `${p.guessesUsed ?? p.attempts} ${((p.guessesUsed ?? p.attempts) === 1) ? 'tentativa' : 'tentativas'} · ${((p.elapsedMs ?? 0) / 1000).toFixed(1)}s` : p.status === 'lost' ? 'Não terminou' : p.attempts === 0 ? 'Pensando...' : `${p.attempts} de ${guessLimit} tentativas`}</span></div><div className={`attempt-count ${p.status === 'won' ? 'count-won' : ''}`}>{p.rank ? `${p.rank}º` : p.status === 'won' ? '✓' : `${p.attempts}/${guessLimit}`}</div></div>)}</div>
       </>}
     </aside></div>
-    {match.phase === 'playing' && battleCountdown > 0 && me?.status !== 'lost' && <div className="battle-elimination-backdrop battle-countdown-backdrop" role="status" aria-live="assertive"><section className="battle-elimination-popup battle-countdown-popup"><p className="eyebrow">{match.gameMode === 'BATTLE_ROYALE' ? `BATTLE ROYALE · RODADA ${match.battleRound ?? 1}` : `${match.gameMode.replaceAll('_', ' ')} · NOVA PARTIDA`}</p><h1>Prepare-se!</h1><p>A partida começa em</p><strong>{battleCountdown}</strong></section></div>}
+    {match.phase === 'playing' && match.countdownEndsAt != null && me?.status !== 'lost' && <div className="battle-elimination-backdrop battle-countdown-backdrop" role="status" aria-live="assertive"><section className="battle-elimination-popup battle-countdown-popup"><p className="eyebrow">{match.gameMode === 'BATTLE_ROYALE' ? `BATTLE ROYALE · RODADA ${match.battleRound ?? 1}` : `${match.gameMode.replaceAll('_', ' ')} · NOVA PARTIDA`}</p><h1>Prepare-se!</h1><p>A partida começa em</p><strong>{battleCountdown}</strong></section></div>}
         {match.gameMode === 'BATTLE_ROYALE' && match.phase === 'playing' && me?.status === 'lost' && <div className="battle-elimination-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="battle-elimination-title"><section className="battle-elimination-popup"><span className="battle-elimination-icon" aria-hidden="true">×</span><p className="eyebrow">BATTLE ROYALE · ROUND {me.eliminationRound ?? match.battleRound}</p><h1 id="battle-elimination-title">Você foi eliminado!</h1><p>A palavra que te eliminou foi:</p><strong>“{me.eliminationWord ?? '—'}”</strong><small>Continue acompanhando a partida. Este aviso ficará aqui até o fim do jogo.</small></section></div>}
     {notice && <div className="toast" role="status">{notice}</div>}
   </main>;
