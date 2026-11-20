@@ -210,7 +210,9 @@ export function App() {
 
   useEffect(() => {
     if (!match || match.phase !== 'playing' || match.countdownEndsAt == null) { setBattleCountdown(0); return; }
-    const updateCountdown = () => { const seconds = Math.max(1, Math.ceil((match.countdownEndsAt! - Date.now()) / 1000)); setBattleCountdown(seconds); };
+    const receivedAt = performance.now();
+    const remainingAtReceipt = match.countdownRemainingMs ?? Math.max(0, match.countdownEndsAt - Date.now());
+    const updateCountdown = () => { const seconds = Math.max(0, Math.ceil((remainingAtReceipt - (performance.now() - receivedAt)) / 1000)); setBattleCountdown(seconds); };
     updateCountdown(); const timer = window.setInterval(updateCountdown, 100); return () => window.clearInterval(timer);
   }, [match?.phase, match?.countdownEndsAt]);
   useEffect(() => {
