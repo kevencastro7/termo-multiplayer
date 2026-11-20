@@ -1,21 +1,53 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { Pool } from 'pg';
 
-const WORDS_FILE_PATH = path.resolve(process.cwd(), 'filtered-portuguese-words.txt');
+const WORDS_FILE_PATH = path.resolve(process.cwd(), 'word-statuses.json');
+
+interface WordStatusEntry {
+  word: string;
+  status: 'approved' | 'pending' | 'banned';
+}
 
 export class WordService {
   private static allWords: string[] | null = null;
   private static targetWords: string[] | null = null;
   private static normalizedMap: Map<string, string> | null = null;
+  private static pool: Pool | null = process.env.DATABASE_URL
+    ? new Pool({ connectionString: process.env.DATABASE_URL, ...(process.env.DATABASE_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}) })
+    : null;
 
-  private static load(): void {
+  static async initialize(): Promise<void> {
     if (this.allWords) return;
-    const words = fs.readFileSync(WORDS_FILE_PATH, 'utf8').split(/\r?\n/)
-      .map((word) => word.trim().toLocaleUpperCase('pt-BR'))
-      .filter((word) => [...word].length === 5 && this.isValidFormat(word));
-    if (!words.length) throw new Error(`No valid words found at ${WORDS_FILE_PATH}`);
-    this.allWords = [...new Set(words)];
-    this.targetWords = this.allWords.slice(0, 1000);
+    if (process.env.NODE_ENV === 'production' && !this.pool) {
+      throw new Error('DATABASE_URL must be configured in production.');
+    }
+    let entries: unknown;
+    if (this.pool) {
+      const { rows } = await this.pool.query<{ word: string; status: WordStatusEntry['status'] }>(
+        `SELECT word, CASE WHEN decision = 'approved' THEN 'approved' WHEN decision = 'banned' THEN 'banned' ELSE 'pending' END AS status FROM reviewed_words ORDER BY position, word`,
+      );
+      entries = rows;
+    } else {
+      entries = JSON.parse(fs.readFileSync(WORDS_FILE_PATH, 'utf8'));
+    }
+    if (!Array.isArray(entries)) throw new Error(`Expected an array of word statuses at ${WORDS_FILE_PATH}`);
+
+    const validEntries = entries.filter((entry): entry is WordStatusEntry => {
+      if (!entry || typeof entry !== 'object') return false;
+      const candidate = entry as Partial<WordStatusEntry>;
+      return typeof candidate.word === 'string'
+        && ['approved', 'pending', 'banned'].includes(candidate.status ?? '')
+        && this.isValidFormat(candidate.word.trim().toLocaleUpperCase('pt-BR'));
+    });
+    if (!validEntries.length) throw new Error(`No valid words found at ${WORDS_FILE_PATH}`);
+
+    const normalizeEntry = ({ word }: WordStatusEntry) => word.trim().toLocaleUpperCase('pt-BR');
+    this.allWords = [...new Set(validEntries.map(normalizeEntry))];
+    this.targetWords = [...new Set(validEntries
+      .filter(({ status }) => status === 'approved')
+      .map(normalizeEntry))];
+    if (!this.targetWords.length) throw new Error(`No approved target words found at ${WORDS_FILE_PATH}`);
     this.normalizedMap = new Map(this.allWords.map((word) => [this.normalizeWord(word), word]));
     console.info(`Loaded ${this.allWords.length} guess words; ${this.targetWords.length} target words.`);
   }
@@ -27,20 +59,19 @@ export class WordService {
     return [...word].length === 5 && /^[A-ZÀ-ÖØ-Þ]+$/iu.test(word);
   }
   static isValidGuess(word: string): boolean {
-    this.load();
-    return !!this.normalizedMap?.has(this.normalizeWord(word));
+    if (!this.normalizedMap) throw new Error('WordService has not been initialized.');
+    return this.normalizedMap.has(this.normalizeWord(word));
   }
   static getCanonicalWord(word: string): string | undefined {
-    this.load();
     return this.normalizedMap?.get(this.normalizeWord(word));
   }
   static getRandomWord(): string {
-    this.load();
+    if (!this.targetWords) throw new Error('WordService has not been initialized.');
     const words = this.targetWords!;
     return words[Math.floor(Math.random() * words.length)];
   }
   static getRandomWordExcluding(excludedWords: ReadonlySet<string>): string | undefined {
-    this.load();
+    if (!this.targetWords) throw new Error('WordService has not been initialized.');
     const available = this.targetWords!.filter((word) => !excludedWords.has(word));
     if (!available.length) return undefined;
     return available[Math.floor(Math.random() * available.length)];

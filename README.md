@@ -16,6 +16,8 @@ npm run dev
 
 Open the Vite URL shown in the terminal (normally `http://localhost:5173`). The development server proxies Socket.IO to port 3001. Use two browser windows or devices on the same network to create and join a room.
 
+Locally, the game reads its word list from `word-statuses.json`. To test PostgreSQL locally instead, set `DATABASE_URL` before starting the server. When using a hosted database that requires SSL, also set `DATABASE_SSL=true`.
+
 ## Build and run
 
 ```sh
@@ -28,7 +30,7 @@ The production server serves the Socket.IO backend and listens on `PORT` (defaul
 
 ## Deploy to Railway
 
-This repository is configured as a **single Railway web service**: Railway builds the Vite client and TypeScript server, then starts Express, which serves the client and Socket.IO from the same domain. The `/health` endpoint is configured for Railway's deployment health check. Keep the repository root as the service root so both `filtered-portuguese-words.txt` and `railway.json` are included.
+This repository is configured as a **single Railway web service**: Railway builds the Vite client and TypeScript server, then starts Express, which serves the client and Socket.IO from the same domain. The `/health` endpoint is configured for Railway's deployment health check. Keep the repository root as the service root so both `word-statuses.json` and `railway.json` are included.
 
 1. Push this repository to GitHub.
 2. In Railway, create a project and choose **Deploy from GitHub repo**, then select this repository.
@@ -36,12 +38,14 @@ This repository is configured as a **single Railway web service**: Railway build
 4. After the first deployment is healthy, open the service's **Settings → Networking** and generate a public domain.
 5. Open the generated HTTPS domain. The same origin serves the web app and real-time Socket.IO connection; no separate `CLIENT_URL` or manually configured port is needed.
 
+For production, configure `DATABASE_URL` in Railway's service variables with the PostgreSQL connection string, preferably using Railway's linked PostgreSQL service reference. Do not commit credentials. Set `DATABASE_SSL=true` only if the provider requires SSL. The server loads statuses from the `reviewed_words` table used by the `word-review` app; ensure that app has initialized/populated the table before deploying this game. Production startup fails if `DATABASE_URL` is missing or the table cannot be read.
+
 Railway provides the `PORT` variable automatically; the server listens on it. Rooms are held in memory, so active matches are cleared when a deployment restarts. Run one replica unless you later add shared room storage and a Socket.IO adapter for horizontal scaling.
 
 ## Rules
 
-- One secret word is selected from the first 2,000 dictionary entries when a room is created.
-- Any five-letter word in `allWords` is accepted as a guess; it does not need to be a possible answer.
+- Secret words are selected only from entries marked `approved` in `word-statuses.json`.
+- Every five-letter word listed in `word-statuses.json` is accepted as a guess, regardless of status; it does not need to be a possible answer.
 - The room host starts each round. All players in the room compete on the same word, each with six attempts and a five-minute server-side timer.
 - Players who join during a round wait until it ends, then can play in the next round.
 - Returning to the lobby keeps the room open for another round; the next round uses a new target word.

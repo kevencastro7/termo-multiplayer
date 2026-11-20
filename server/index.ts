@@ -596,4 +596,9 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => removePlayer(socket));
 });
 
-httpServer.listen(PORT, () => console.info(`TERMO server listening on http://localhost:${PORT}`));
+WordService.initialize()
+  .then(() => httpServer.listen(PORT, () => console.info(`TERMO server listening on http://localhost:${PORT}`)))
+  .catch((error: unknown) => {
+    console.error('Failed to initialize word list:', error);
+    process.exit(1);
+  });
