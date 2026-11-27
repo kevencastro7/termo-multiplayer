@@ -25,7 +25,7 @@ export class WordService {
     let entries: unknown;
     if (this.pool) {
       const { rows } = await this.pool.query<{ word: string; status: WordStatusEntry['status'] }>(
-        `SELECT word, CASE WHEN decision = 'approved' THEN 'approved' WHEN decision = 'banned' THEN 'banned' ELSE 'pending' END AS status FROM reviewed_words ORDER BY position, word`,
+        `SELECT word, CASE WHEN decision = 'approved' THEN 'approved' WHEN decision = 'banned' THEN 'banned' ELSE 'pending' END AS status FROM reviewed_words WHERE decision IS DISTINCT FROM 'deleted' ORDER BY position, word`,
       );
       entries = rows;
     } else {
